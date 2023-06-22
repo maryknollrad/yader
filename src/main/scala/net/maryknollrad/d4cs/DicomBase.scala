@@ -8,7 +8,7 @@ object DicomBase:
     type QueryHandler[A] = (DicomTags, Attributes) => A
     given LocalDate2String:Conversion[LocalDate, String] = (d: LocalDate) => d.format(DateTimeFormatter.BASIC_ISO_DATE)
 
-    def getTag(tag: Int, attr: Attributes, encoding: String = "utf-8") = 
+    def getTag(tag: Int, attr: Attributes, encoding: String = "utf-8"): String = 
         String(attr.getBytes(tag), encoding)
 
     def printTags(encoding: String = "utf-8")(tags: DicomTags, attr: Attributes): Unit = 
