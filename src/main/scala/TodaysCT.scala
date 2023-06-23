@@ -1,4 +1,5 @@
-import net.maryknollrad.d4cs.{CFind, DicomTags, DicomBase, RetrieveLevel}
+import net.maryknollrad.d4cs.{CFind, DicomBase, RetrieveLevel}
+import DicomBase.*
 import java.time.{LocalDate, LocalDateTime}
 import org.dcm4che3.data.Tag
 import RetrieveLevel.*
@@ -12,8 +13,8 @@ case class CT(chartNo: String, patientName: String, /* studytime: LocalDateTime,
 
 object TodaysCT extends IOApp:
     def run(as: List[String]): IO[ExitCode] = 
-        val dtag = DicomTags(Map(Tag.ModalitiesInStudy -> "CT", Tag.StudyDate -> LocalDate.now()),
-            Seq(Tag.PatientID, Tag.PatientName, Tag.StudyDescription, Tag.StudyTime, Tag.StudyInstanceUID))
+        val dtag: DicomTags = Seq[DicomTag]((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, LocalDate.now():String),
+            Tag.PatientID, Tag.PatientName, Tag.StudyDescription, Tag.StudyTime, Tag.StudyInstanceUID)
 
         val r = Runner("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105)
 

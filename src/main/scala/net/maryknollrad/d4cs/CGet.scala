@@ -253,7 +253,7 @@ trait DicomCGetBase {
         println(s"GETSTUDY : $cuid - $tags")
         val request = makeRequest(cuid)
         configureServiceClass(request, level.getOrElse(StudyLevel)) 
-        addKeys(tags.query, tags.retrieve)
+        // addKeys(tags.query, tags.retrieve)
         getAssociation(request).use { as => IO({
             val dimpseRespHandler = new DimseRSPHandler(as.nextMessageID()) {
                 override def onDimseRSP(as: Association, cmd: Attributes, data: Attributes) = {

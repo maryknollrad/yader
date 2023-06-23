@@ -21,25 +21,18 @@ import javax.lang.model.element.Element
 import java.time.format.DateTimeFormatter
 import scala.util.{Try, Success, Failure}
 
-import DicomBase.QueryHandler
+import DicomBase.* 
+
 // rough adaption of dcm4che FindSCU 
 // https://github.com/dcm4che/dcm4che/blob/master/dcm4che-tool/dcm4che-tool-findscu/src/main/java/org/dcm4che3/tool/findscu/FindSCU.java
 
-trait CFind(callingAe: String, calledAe: String, remoteHost: String, remotePort: Int):
+trait CFind(callingAe: String, calledAe: String, remoteHost: String, remotePort: Int) extends DicomBase:
     val deviceName: String = "FINDSCU"
-    // val callingAe: String
-    // val calledAe: String
-    // val remoteHost: String
-    // val remotePort: Int
-    // val hostName: String
 
-    println(s"setting device... to $deviceName")
     private val device = Device(deviceName)
-    println(s"setting application entity... to $callingAe")
     private val ae = ApplicationEntity(callingAe)
     private val conn = Connection()
     private val remote = Connection()
-    private val keys = Attributes()
 
     private val priority = Priority.NORMAL
     
@@ -106,30 +99,6 @@ trait CFind(callingAe: String, calledAe: String, remoteHost: String, remotePort:
         level.foreach(l => keys.setString(Tag.QueryRetrieveLevel, VR.CS, l.strRepr))
     }
 
-    /* configureKeys */
-    // CLI.addAttributes는 .으로 구분된 하나의 attribute를 추가하는 데 사용된다
-    // int []tags로 되어있지만 여럿의 tag가 아니라 계층별 분리된 하나의 tag
-    def addAttributes(tagHierarchy: Seq[Int], value: Option[String]) = 
-        var item: Attributes = keys
-        tagHierarchy.init.foreach({ tag => 
-            val pre_sq = item.getSequence(tag)
-            val sq = if (pre_sq == null) item.newSequence(tag, 1) else pre_sq
-            if (sq.isEmpty) sq.add(Attributes())
-            item = sq.get(0)
-        })
-        val tag = tagHierarchy.last
-        val vr = ElementDictionary.vrOf(tag, item.getPrivateCreator(tag))
-        value match
-            case Some(tv) => 
-                item.setString(tag, vr, tv)
-            case None => 
-                if (vr == VR.SQ) item.newSequence(tag, 1).add(Attributes(0))
-                else item.setNull(tag, vr)
-
-    def addKeys(queryKeys: Map[Int, String], retrieveKeys: Seq[Int]) = 
-        queryKeys.foreach((tag, value) => addAttributes(Seq(tag), Some(value)))
-        retrieveKeys.foreach(tag => addAttributes(Seq(tag), None))
-
     /* skipped configureOutput */ 
     /* skipped configureCancel */
 
@@ -154,7 +123,8 @@ trait CFind(callingAe: String, calledAe: String, remoteHost: String, remotePort:
             handler: QueryHandler[A]) = 
         setInformationModel(cuid, level)
         val request = makeRequest(cuid)
-        addKeys(dtags.query, dtags.retrieve)
+        addKeys(dtags)
+        // addKeys(dtags.query, dtags.retrieve)
         val result = scala.collection.mutable.ArrayBuffer.empty[A]
         for {
             _ <- getAssociation(request).use { as => IO({
@@ -171,5 +141,4 @@ trait CFind(callingAe: String, calledAe: String, remoteHost: String, remotePort:
     
     def shutdown() = 
         executorService.shutdown()
-
         scheduledExecutorService.shutdown()
