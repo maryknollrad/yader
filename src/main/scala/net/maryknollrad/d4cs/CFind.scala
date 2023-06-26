@@ -25,8 +25,7 @@ import DicomBase.*
 
 // rough adaption of dcm4che FindSCU 
 // https://github.com/dcm4che/dcm4che/blob/master/dcm4che-tool/dcm4che-tool-findscu/src/main/java/org/dcm4che3/tool/findscu/FindSCU.java
-
-trait CFind(callingAe: String, calledAe: String, remoteHost: String, remotePort: Int) extends DicomBase:
+case class CFind(val callingAe: String, val calledAe: String, val remoteHost: String, val remotePort: Int) extends DicomBase:
     val deviceName: String = "FINDSCU"
 
     private val device = Device(deviceName)
