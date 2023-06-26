@@ -7,7 +7,7 @@ import DicomBase.LocalDate2String
 import cats.effect.*
 import org.dcm4che3.data.Attributes
 
-case class Runner(callingAe: String, calledAe: String, remoteHost: String, remotePort: Int) extends CFind(callingAe, calledAe, remoteHost, remotePort)
+// case class Runner(callingAe: String, calledAe: String, remoteHost: String, remotePort: Int) extends CFind(callingAe, calledAe, remoteHost, remotePort)
 
 case class CT(chartNo: String, patientName: String, /* studytime: LocalDateTime, */ description: String)
 
@@ -16,7 +16,7 @@ object TodaysCT extends IOApp:
         val dtag: DicomTags = Seq[DicomTag]((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, LocalDate.now():String),
             Tag.PatientID, Tag.PatientName, Tag.StudyDescription, Tag.StudyTime, Tag.StudyInstanceUID)
 
-        val r = Runner("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105)
+        val r = new CFind("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105) {}
 
         def retriveCTInfo(dtags: DicomTags, attr: Attributes): CT = 
             import DicomBase.getTag
