@@ -1,6 +1,6 @@
 package net.maryknollrad.d4cs
 
-import java.time.LocalDate
+import java.time.{LocalDate, LocalTime}
 import java.time.format.DateTimeFormatter
 import org.dcm4che3.data.*
 
@@ -12,19 +12,9 @@ object DicomBase:
     type DicomTags = Seq[DicomTag]
 
     given LocalDate2String:Conversion[LocalDate, String] = (d: LocalDate) => d.format(DateTimeFormatter.BASIC_ISO_DATE)
+    given String2LocalDate:Conversion[String, LocalDate] = LocalDate.parse
+    given String2LocalTime:Conversion[String, LocalTime] = LocalTime.parse
     given Tup2StringAttribute: Conversion[Tuple2[Int, String], QueryTag] = t => QueryTag(t._1, t._2)
-
-    def getTag(tag: Int, attr: Attributes, encoding: String = "utf-8"): String = 
-        String(attr.getBytes(tag), encoding)
-
-    def printTags(encoding: String = "utf-8")(tags: DicomTags, attr: Attributes): Unit = 
-        inline def print(t: Int) = println(getTag(t, attr, encoding))
-        tags.foreach: tag =>
-             tag match
-                case QueryTag(t, v) => 
-                    println(s"(${t}) $v")
-                case t: RetrieveTag =>
-                    println(s"(${t}) ${getTag(t.asInstanceOf[Int], attr, encoding)}")
 
 trait DicomBase:
     import DicomBase.* 
@@ -61,13 +51,8 @@ trait DicomBase:
         dtags.foreach: tag =>
             tag match 
                 case QueryTag(t, v) =>
+                    assert(!keys.contains(t))
                     addAttributes(Seq(t), Some(v))
                 case t: RetrieveTag =>
+                    assert(!keys.contains(t))
                     addAttributes(Seq(t), None)
-
-enum RetrieveLevel(val strRepr: String):
-    case PatientLevel extends RetrieveLevel("PATIENT")
-    case StudyLevel extends RetrieveLevel("STUDY")
-    case PatientStudyOnly extends RetrieveLevel("STUDY")
-    case SeriesLevel extends RetrieveLevel("SERIES")
-    case ImageLevel extends RetrieveLevel("IMAGE")
