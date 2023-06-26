@@ -11,7 +11,6 @@ import org.dcm4che3.data.Attributes
 //                 studyDateTime: LocalDateTime, description: String)
 
 case class CT(chartNo: String, patientName: String, description: String)
-
 object TodaysCT extends IOApp:
     def run(as: List[String]): IO[ExitCode] = 
         printTodaysExams() *> IO(ExitCode.Success)
