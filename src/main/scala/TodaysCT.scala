@@ -15,11 +15,13 @@ object TodaysCT extends IOApp:
         printTodaysExams() *> IO(ExitCode.Success)
 
     def printTodaysExams(modality: String = "CT") = 
+        val dtag_old: DicomTags = Seq[DicomTag]((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, LocalDate.now():String),
+            Tag.PatientID, Tag.PatientName, Tag.StudyDescription, Tag.StudyTime, Tag.StudyInstanceUID)
         val dtag = DicomTags((Tag.ModalitiesInStudy, modality), (Tag.StudyDate, LocalDate.now():String),
                         Tag.PatientID, Tag.PatientName, Tag.PatientSex, Tag.PatientAge, 
                         Tag.StudyDate, Tag.StudyTime, Tag.StudyDescription, Tag.StudyInstanceUID)
 
-        val r = CFind("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105) 
+        val r = new CFind("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105) 
 
         def retriveCTInfo(dtags: DicomTags, attr: Attributes): CT = 
             import DicomTags.getStringTag
@@ -37,9 +39,9 @@ object TodaysCT extends IOApp:
                     println(s"Today's $modality exams")
                     println("-" * 80)
             cts <- r.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, 
-                    Some(StudyLevel), dtag, retriveCTInfo)
+                    Some(StudyLevel), dtag_old, retriveCTInfo)
             _   <- IO:
                     cts.foreach(println)
                     println(s"Got ${cts.length} exams")
-                    println(dtag)
+                    println(dtag_old == dtag)
         yield ()
