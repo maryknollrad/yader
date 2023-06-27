@@ -11,5 +11,6 @@ lazy val d4cs = (project in file("."))
             "org.typelevel" %% "cats-effect" % catsEffectVersion,
             "org.dcm4che" % "dcm4che-core" % dcm4cheVersion,
             "org.dcm4che" % "dcm4che-net" % dcm4cheVersion,
+            "org.dcm4che" % "dcm4che-imageio" % dcm4cheVersion,
         )
     )

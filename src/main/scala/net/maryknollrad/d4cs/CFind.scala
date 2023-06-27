@@ -27,7 +27,7 @@ import scala.collection.mutable.ArrayBuffer
 // rough adaption of dcm4che FindSCU 
 // https://github.com/dcm4che/dcm4che/blob/master/dcm4che-tool/dcm4che-tool-findscu/src/main/java/org/dcm4che3/tool/findscu/FindSCU.java
 
-trait CFind(val callingAe: String, val calledAe: String, val remoteHost: String, val remotePort: Int, val encoding: String = "utf-8") extends DicomBase:
+case class CFind(val callingAe: String, val calledAe: String, val remoteHost: String, val remotePort: Int, val encoding: String = "utf-8") extends DicomBase:
     val deviceName: String = "FINDSCU"
 
     private val device = Device(deviceName)
@@ -131,23 +131,21 @@ trait CFind(val callingAe: String, val calledAe: String, val remoteHost: String,
        use toTagArray function to get tag and then use the data after handler returns */
     def query[A](cuid: String, level: Option[RetrieveLevel], 
             dtags: DicomTags, // querykeys: Map[Int, String], retrieve: Seq[Int], 
-            handler: QueryHandler[A] = toTagArray) = 
+            handler: QueryHandler[A] = toTagArray): IO[Seq[A]] = 
         setInformationModel(cuid, level)
         val request = makeRequest(cuid)
         addKeys(dtags)
         val result = ArrayBuffer.empty[A]
-        for {
-            _ <- getAssociation(request).use { as => IO({
-                    val dimpseRespHandler = new DimseRSPHandler(as.nextMessageID()) {
-                        override def onDimseRSP(as: Association, cmd: Attributes, data: Attributes) = {
-                            super.onDimseRSP(as, cmd, data)
-                            val status = cmd.getInt(Tag.Status, -1)
-                            if (Status.isPending(status)) result += handler(dtags, data)
-                        }
-                    }
-                    as.cfind(cuid, priority, keys, null, dimpseRespHandler)
-                })}
-            } yield result.toSeq
+        for 
+            _ <- getAssociation(request).use: as => 
+                    IO:
+                        val dimpseRespHandler = new DimseRSPHandler(as.nextMessageID()):
+                            override def onDimseRSP(as: Association, cmd: Attributes, data: Attributes) = 
+                                super.onDimseRSP(as, cmd, data)
+                                val status = cmd.getInt(Tag.Status, -1)
+                                if (Status.isPending(status)) result += handler(dtags, data)
+                        as.cfind(cuid, priority, keys, null, dimpseRespHandler)
+        yield result.toSeq
     
     def shutdown() = 
         executorService.shutdown()
