@@ -22,11 +22,12 @@ import java.time.format.DateTimeFormatter
 import scala.util.{Try, Success, Failure}
 
 import DicomBase.* 
+import scala.collection.mutable.ArrayBuffer
 
 // rough adaption of dcm4che FindSCU 
 // https://github.com/dcm4che/dcm4che/blob/master/dcm4che-tool/dcm4che-tool-findscu/src/main/java/org/dcm4che3/tool/findscu/FindSCU.java
 
-trait CFind(val callingAe: String, val calledAe: String, val remoteHost: String, val remotePort: Int) extends DicomBase:
+trait CFind(val callingAe: String, val calledAe: String, val remoteHost: String, val remotePort: Int, val encoding: String = "utf-8") extends DicomBase:
     val deviceName: String = "FINDSCU"
 
     private val device = Device(deviceName)
@@ -118,14 +119,23 @@ trait CFind(val callingAe: String, val calledAe: String, val remoteHost: String,
                 // scheduledExecutorService.shutdown()
             })})
 
+    def toTagArray(dtags: DicomTags, attr: Attributes): Seq[StringTag] =
+        dtags.map: tag =>
+            tag match 
+                case QueryTag(t, v) =>
+                    StringTag(t, v)
+                case t: RetrieveTag =>
+                    StringTag(t, DicomTags.getStringTag(t, attr, encoding))
+
+    /* Idle something exception happens when QueryHandler function takes some time, 
+       use toTagArray function to get tag and then use the data after handler returns */
     def query[A](cuid: String, level: Option[RetrieveLevel], 
             dtags: DicomTags, // querykeys: Map[Int, String], retrieve: Seq[Int], 
-            handler: QueryHandler[A]) = 
+            handler: QueryHandler[A] = toTagArray) = 
         setInformationModel(cuid, level)
         val request = makeRequest(cuid)
         addKeys(dtags)
-        // addKeys(dtags.query, dtags.retrieve)
-        val result = scala.collection.mutable.ArrayBuffer.empty[A]
+        val result = ArrayBuffer.empty[A]
         for {
             _ <- getAssociation(request).use { as => IO({
                     val dimpseRespHandler = new DimseRSPHandler(as.nextMessageID()) {

@@ -6,15 +6,17 @@ import org.dcm4che3.data.*
 
 object DicomBase:
     type QueryHandler[A] = (DicomTags, Attributes) => A
-    case class QueryTag(tag: Int, value: String)
+    case class StringTag(tag: Int, value: String)
+    type QueryTag = StringTag
     type RetrieveTag = Int
     type DicomTag = RetrieveTag | QueryTag
     type DicomTags = Seq[DicomTag]
-
+    type TagValue = StringTag
+    private val DicomTimeFormat = DateTimeFormatter.ofPattern("HHmmss")
     given LocalDate2String:Conversion[LocalDate, String] = (d: LocalDate) => d.format(DateTimeFormatter.BASIC_ISO_DATE)
-    given String2LocalDate:Conversion[String, LocalDate] = LocalDate.parse
-    given String2LocalTime:Conversion[String, LocalTime] = LocalTime.parse
-    given Tup2StringAttribute: Conversion[Tuple2[Int, String], QueryTag] = t => QueryTag(t._1, t._2)
+    given String2LocalDate:Conversion[String, LocalDate] = s => LocalDate.parse(s, DateTimeFormatter.BASIC_ISO_DATE)
+    given String2LocalTime:Conversion[String, LocalTime] = s => LocalTime.parse(s, DicomTimeFormat)
+    given Tup2StringAttribute: Conversion[Tuple2[Int, String], QueryTag] = t => StringTag(t._1, t._2)
 
 trait DicomBase:
     import DicomBase.* 
