@@ -185,7 +185,7 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
     // def configureServiceClass(req: AAssociateRQ) = ???
     def getStudy(cuid: String, level: Option[RetrieveLevel], tags: DicomTags) = 
         // 기본 StudyRoot - GetSCU.informationModelOf
-        println(s"GETSTUDY : $cuid - $tags")
+        // println(s"GETSTUDY : $cuid - $tags")
         val request = makeRequest(cuid)
         configureServiceClass(request, level.getOrElse(StudyLevel))
         addKeys(tags)

@@ -16,7 +16,17 @@ object Demo extends IOApp:
 
     def run(as: List[String]): IO[ExitCode] = 
         // printTodaysExams() *> IO(ExitCode.Success)
-        cgetTest2(iiuid) *> IO(ExitCode.Success)
+        // cgetTest2(iiuid) *> IO(ExitCode.Success)
+        for 
+            t2 <- CTDose.abc(CTDose.ConnectionInfo("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105, "euc_kr"))
+            _ <- IO:
+                    val (fails, imgs) = t2
+                    println(s"Got ${fails.length} Failures and ${imgs.length} successful images.")
+                    imgs.zipWithIndex.foreach: (im, i) => 
+                        val of = java.io.File(s"$i.png")
+                        javax.imageio.ImageIO.write(im, "png", of)
+                    fails.zipWithIndex.foreach(println)
+        yield ExitCode.Success
 
     def printTodaysExams(modality: String = "CT") = 
         val dtag = DicomTags((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, LocalDate.now():String),
