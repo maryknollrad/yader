@@ -22,10 +22,11 @@ object Demo extends IOApp:
             _ <- IO:
                     val (fails, imgs) = t2
                     println(s"Got ${fails.length} Failures and ${imgs.length} successful images.")
-                    imgs.zipWithIndex.foreach: (im, i) => 
-                        val of = java.io.File(s"$i.png")
-                        javax.imageio.ImageIO.write(im, "png", of)
                     fails.zipWithIndex.foreach(println)
+                    imgs.zipWithIndex.foreach: (is, i) => 
+                        is.zipWithIndex.foreach: (im, j) =>
+                            val of = java.io.File(s"$i-$j.png")
+                            javax.imageio.ImageIO.write(im, "png", of)
         yield ExitCode.Success
 
     def printTodaysExams(modality: String = "CT") = 

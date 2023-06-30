@@ -46,15 +46,15 @@ object CTDose:
 
         find.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, Some(ImageLevel), dtag)
 
-    private val reader = ImageIO.getImageReadersByFormatName("DICOM").next()
+    private val dicomReader = ImageIO.getImageReadersByFormatName("DICOM").next()
     def getImage(get: CGet, sopInstanceUid: String): IO[BufferedImage] = 
         for 
             _ <- get.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), DicomTags((Tag.SOPInstanceUID, sopInstanceUid)))
             im <- IO:
                     val storage = get.getImageStorage()
                     val dis = DicomInputStream(java.io.ByteArrayInputStream(storage.apply(sopInstanceUid.trim).toByteArray()))
-                    reader.setInput(dis)
-                    reader.read(0, reader.getDefaultReadParam())
+                    dicomReader.setInput(dis)
+                    dicomReader.read(0, dicomReader.getDefaultReadParam())
         yield im
 
     private def seriesBySeriesNumber(sesTags: Seq[Seq[StringTag]], targetNumber: Int) = 
@@ -79,51 +79,53 @@ object CTDose:
 
     def abc(ci: ConnectionInfo) = 
         import cats.syntax.all.*
-        // given fr: FindResource = findResource("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105, "euc_kr")
-        // given gr: GetResource = getResource("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105)
 
         val r = for 
-            find <- findResource(ci.callingAe, ci.calledAe, ci.host, ci.port, ci.encoding)
-            get <- getResource(ci.callingAe, ci.calledAe, ci.host, ci.port)
-        yield (find, get)
+            cfind <- findResource(ci.callingAe, ci.calledAe, ci.host, ci.port, ci.encoding)
+            cget <- getResource(ci.callingAe, ci.calledAe, ci.host, ci.port)
+        yield (cfind, cget)
 
         r.use:
-            case (find, get) =>
+            case (cfind, cget) =>
                 for             
                     // CTs Tags : Seq[Seq[StringTag]]
-                    ctsTags <- findCTStudies(find)
+                    ctsTags <- findCTStudies(cfind)
+                    // find seriesInstanceUIDs using studyInstanceUID
                     // EitherSeriesesTags : Seq[Either[String, Seq[Seq[StringTag]]]] - collection of StringTag (Seq[StringTag]) per series (Seq[Seq[StringTag]])
                     eSesTagss <- ctsTags.traverse(tags =>  
-                                val etag = tags.find(_.tag == Tag.StudyInstanceUID) match 
-                                    case Some(tag) =>
-                                        Either.right[ExtractionError, StringTag](tag)
-                                    case None =>
-                                        Either.left[ExtractionError, StringTag](s"Can't find StudyInstanceUID tag of CT (Accession Number : ${accessionNumber(tags)})")
-                                etag.map(t => findSeries(find, t.value)).sequence)
-                    // 
+                                val etag = tags.find(_.tag == Tag.StudyInstanceUID).toRight(s"Can't find StudyInstanceUID Tag (Accession Number : ${accessionNumber(tags)})")
+                                etag.map(t => findSeries(cfind, t.value)).sequence)
+                    // find SOPInstanceUIDs using seriesInstanceUID
                     eImsTagss <- eSesTagss.traverse(eSesTags =>
                                 val eSeTag = eSesTags.flatMap(seriesBySeriesNumber(_, 9000))
                                 eSeTag.flatMap(ts => 
                                     ts.find(_.tag == Tag.SeriesInstanceUID)
-                                        .toRight(s"Can't find SeriesInstanceUID (AccessionNumber : ${accessionNumber(ts)})"))
-                                .map(t => findImages(find, t.value)).sequence)
+                                        .toRight(s"Can't find SeriesInstanceUID Tag (AccessionNumber : ${accessionNumber(ts)})"))
+                                .map(t => findImages(cfind, t.value)).sequence)
+                    // convert each dose report series SOPInstanceUIDs => BufferedImages
                     eBIs <- eImsTagss.traverse(eImsTags =>
-                                    val eImUIDAN = eImsTags.flatMap(imsTags =>
-                                        imsTags match 
-                                            case Seq(imTags) => // one
-                                                val (ouid, oacno) = imTags.foldLeft(Option.empty[String], Option.empty[String]) : 
-                                                    case ((uid, acno), t) =>
-                                                        if t.tag == Tag.SOPInstanceUID then (Some(t.value), acno)
-                                                        else if t.tag == Tag.AccessionNumber then (uid, Some(t.value))
-                                                        else (uid, acno)
-                                                (ouid, oacno) match
-                                                    case (Some(uid), Some(acno)) =>
-                                                        Right((uid, acno))
+                                    val eImUIDANs: Either[String, Seq[(String, String)]] = eImsTags.flatMap(imsTags =>
+                                        if (imsTags.length == 0) then Left("DoseReport Series does not contains image")
+                                        else
+                                            val imUids = imsTags.map: imTags => 
+                                                // filter SOPInstanceUID & AccessionNumber Tags
+                                                val (oacno, ouid) = imTags.foldLeft(Option.empty[String], Option.empty[String]) : 
+                                                    case ((oacno, ouid), t) =>
+                                                        if t.tag == Tag.SOPInstanceUID then (oacno, Some(t.value))
+                                                        else if t.tag == Tag.AccessionNumber then (Some(t.value), ouid)
+                                                        else (oacno, ouid)
+                                                (oacno, ouid) match
+                                                    case (Some(acno), Some(uid)) =>
+                                                        Right((acno, uid))
                                                     case _ =>
                                                         Left(s"Can't find SOPInstanceUID or AccessionNumber (AccessionNumber : ${accessionNumber(imTags)})")
-                                            case _ =>
-                                                Left(s"DoseReport Series image count is not one ${imsTags.length} (Accession Number : ${imsTags.headOption.map(accessionNumber)})"))
-                                    // eImUIDAN.map((uid,acno) => getImage(get, uid).map(bi => (bi, acno))).sequence)
-                                    eImUIDAN.map((uid,acno) => getImage(get, uid).map(bi => drawString(bi, acno))).sequence)
+                                            // if any image is invalid than all is invalid
+                                            imUids.find(_.isLeft) match 
+                                                case Some(Left(l)) => Left(l)
+                                                case _ => Right(imUids.flatMap(_.toOption)))
+                                    // get images using SOPInstanceUID and mark AccessionNumber
+                                    eImUIDANs.map(imUIDANs =>
+                                        imUIDANs.traverse((acno, uid) => 
+                                            getImage(cget, uid).map(bi => drawString(bi, acno)))).sequence)
                     (errs, bis) = eBIs.partition(_.isLeft)
-                yield (errs.flatMap(_.swap.toOption), bis.flatMap(_.toOption))
+                yield (errs.flatMap(_.swap.toOption), bis.flatMap(_.toOption))  // flatten LEFTs and RIGHTs
