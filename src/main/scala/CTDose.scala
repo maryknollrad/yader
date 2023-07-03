@@ -18,14 +18,14 @@ object CTDose:
     type FindResource = Resource[IO, CFind]
     type GetResource = Resource[IO, CGet]
 
-    def findResource(callingAe: String, calledAe: String, remoteHost: String, remotePort: Int, encoding: String = "euc-kr") = 
+    def findResource(ci: Configuration.ConnectionInfo) = 
         Resource.make
-            (IO(CFind(callingAe, calledAe, remoteHost, remotePort, encoding)))
+            (IO(CFind(ci.callingAe, ci.calledAe, ci.host, ci.port, ci.encoding)))
             (f => IO(f.shutdown()))
 
-    def getResource(callingAe: String, calledAe: String, remoteHost: String, remotePort: Int) = 
+    def getResource(ci: Configuration.ConnectionInfo) = 
         Resource.make
-            (IO(CGet(callingAe, calledAe, remoteHost, remotePort, false)))
+            (IO(CGet(ci.callingAe, ci.calledAe, ci.host, ci.port, false)))
             (g => IO(g.shutdown()))
 
     def findCTStudies(find: CFind, d: LocalDate = LocalDate.now()): IO[Seq[Seq[StringTag]]] = 
@@ -75,14 +75,12 @@ object CTDose:
         gh.drawString(s, 20, 20)
         bi
 
-    case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
-
-    def abc(ci: ConnectionInfo) = 
+    def abc(ci: Configuration.ConnectionInfo) = 
         import cats.syntax.all.*
 
         val r = for 
-            cfind <- findResource(ci.callingAe, ci.calledAe, ci.host, ci.port, ci.encoding)
-            cget <- getResource(ci.callingAe, ci.calledAe, ci.host, ci.port)
+            cfind <- findResource(ci)
+            cget <- getResource(ci)
         yield (cfind, cget)
 
         r.use:

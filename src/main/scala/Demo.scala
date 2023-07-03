@@ -7,6 +7,7 @@ import RetrieveLevel.*
 import DicomBase.*
 import cats.effect.*
 import org.dcm4che3.data.Attributes
+import Configuration.ConnectionInfo
 
 case class CT(chartNo: String, patientName: String, patientSex: String, patientAge: Int, 
                 studyDateTime: LocalDateTime, description: String, studyID: String)
@@ -15,25 +16,38 @@ object Demo extends IOApp:
     import DicomBase.{String2LocalDate, String2LocalTime, LocalDate2String}
 
     def run(as: List[String]): IO[ExitCode] = 
-        // printTodaysExams() *> IO(ExitCode.Success)
-        // cgetTest2(iiuid) *> IO(ExitCode.Success)
-        for 
-            t2 <- CTDose.abc(CTDose.ConnectionInfo("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105, "euc_kr"))
-            _ <- IO:
-                    val (fails, imgs) = t2
-                    println(s"Got ${fails.length} Failures and ${imgs.length} successful images.")
-                    fails.zipWithIndex.foreach(println)
-                    imgs.zipWithIndex.foreach: (is, i) => 
-                        is.zipWithIndex.foreach: (im, j) =>
-                            val of = java.io.File(s"$i-$j.png")
-                            javax.imageio.ImageIO.write(im, "png", of)
-        yield ExitCode.Success
+        // loadConfigAndRun(dose) *> IO(ExitCode.Success)
+        // loadConfigAndRun(printTodaysExams()) *> IO(ExitCode.Success)
+        loadConfigAndRun(cgetTest2(iiuid)) *> IO(ExitCode.Success)
 
-    def printTodaysExams(modality: String = "CT") = 
+    def loadConfigAndRun[A](f: ConnectionInfo => IO[A]) = 
+        val c = Configuration()
+        for 
+            r <- c match
+                    case Left(value) => 
+                        IO(println(value))
+                    case Right(c) =>
+                        f(c)
+        yield r 
+
+    def dose(c: ConnectionInfo) = 
+        for 
+            t2 <- CTDose.abc(c)
+            _ <- IO:                
+                val (fails, imgs) = t2
+                println(s"Got ${fails.length} Failures and ${imgs.length} successful images.")
+                fails.zipWithIndex.foreach(println)
+                imgs.zipWithIndex.foreach: (is, i) => 
+                    is.zipWithIndex.foreach: (im, j) =>
+                        val of = java.io.File(s"$i-$j.png")
+                        javax.imageio.ImageIO.write(im, "png", of)
+        yield ()
+
+    def printTodaysExams(modality: String = "CT")(ci: ConnectionInfo) = 
         val dtag = DicomTags((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, LocalDate.now():String),
                Tag.PatientID, Tag.PatientName, Tag.PatientSex, Tag.PatientAge, Tag.StudyTime, Tag.StudyDescription, Tag.StudyInstanceUID)
 
-        val r = CFind("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105, "euc_kr")
+        val r = CFind(ci.callingAe, ci.calledAe, ci.host, ci.port, ci.encoding)
 
         def retriveCTInfo(tags: Seq[StringTag]): CT = 
             val chartno = tags.find(_.tag == Tag.PatientID).map(_.value).get
@@ -59,8 +73,8 @@ object Demo extends IOApp:
 
     private val iiuid = "1.2.410.200010.20220318.114440.100041.132583.78541"
     // store to file
-    def cgetTest1(imageInstanceUID: String) =  
-        val r = CGet("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105, true)
+    def cgetTest1(imageInstanceUID: String = iiuid)(ci: ConnectionInfo) =  
+        val r = CGet(ci.callingAe, ci.calledAe, ci.host, ci.port)
         val dtag = DicomTags((Tag.SOPInstanceUID, imageInstanceUID))
         for 
             _ <- IO: 
@@ -69,12 +83,12 @@ object Demo extends IOApp:
         yield ()
 
     // store to buffer, and then convert to png file
-    def cgetTest2(imageInstanceUID: String) =  
+    def cgetTest2(imageInstanceUID: String = iiuid)(ci: ConnectionInfo) =  
         import org.dcm4che3.imageio.plugins.dcm.*   // register "DICOM" ImageReader
         import org.dcm4che3.io.DicomInputStream
         import javax.imageio.ImageIO
 
-        val r = CGet("READROOM", "NETGEAR_EXTERNAL", "192.168.10.133", 105, false)
+        val r = CGet(ci.callingAe, ci.calledAe, ci.host, ci.port, false)
         val dtag = DicomTags((Tag.SOPInstanceUID, imageInstanceUID))
         val reader = ImageIO.getImageReadersByFormatName("DICOM").next()
         for 
