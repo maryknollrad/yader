@@ -13,5 +13,6 @@ lazy val d4cs = (project in file("."))
             "org.dcm4che" % "dcm4che-net" % dcm4cheVersion,
             "org.dcm4che" % "dcm4che-imageio" % dcm4cheVersion,
             "org.ekrich" %% "sconfig" % "1.5.0",
+            "net.sourceforge.tess4j" % "tess4j" % "5.7.0",
         )
     )

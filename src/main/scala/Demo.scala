@@ -8,6 +8,7 @@ import DicomBase.*
 import cats.effect.*
 import org.dcm4che3.data.Attributes
 import Configuration.ConnectionInfo
+import java.awt.image.BufferedImage
 
 case class CT(chartNo: String, patientName: String, patientSex: String, patientAge: Int, 
                 studyDateTime: LocalDateTime, description: String, studyID: String)
@@ -18,7 +19,14 @@ object Demo extends IOApp:
     def run(as: List[String]): IO[ExitCode] = 
         // loadConfigAndRun(dose) *> IO(ExitCode.Success)
         // loadConfigAndRun(printTodaysExams()) *> IO(ExitCode.Success)
-        loadConfigAndRun(cgetTest2(iiuid)) *> IO(ExitCode.Success)
+        // loadConfigAndRun(cgetTest2(iiuid)).flatMap({
+        //     case im: BufferedImage => 
+        //         savepng(s"$iiuid.png", im)
+        // })  *> IO(ExitCode.Success)
+        loadConfigAndRun(cgetTest2(iiuid)).flatMap({
+            case im: BufferedImage => 
+                ocr(im)
+        })  *> IO(ExitCode.Success)
 
     def loadConfigAndRun[A](f: ConnectionInfo => IO[A]) = 
         val c = Configuration()
@@ -26,9 +34,15 @@ object Demo extends IOApp:
             r <- c match
                     case Left(value) => 
                         IO(println(value))
-                    case Right(c) =>
-                        f(c)
+                    case Right((ci, tp)) =>
+                        Tesseract.setTesseractPath(tp)
+                        f(ci)
         yield r 
+
+    def ocr(image: BufferedImage):IO[Unit] =
+        IO:
+            val r = Tesseract.doOCR(image)
+            println(r)
 
     def dose(c: ConnectionInfo) = 
         for 
@@ -82,8 +96,13 @@ object Demo extends IOApp:
             _ <- r.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), dtag)
         yield ()
 
+    private def savepng(fname: String, image: BufferedImage): IO[Unit] = 
+        IO:
+            val of = java.io.File(fname)
+            javax.imageio.ImageIO.write(image, "png", of)
+
     // store to buffer, and then convert to png file
-    def cgetTest2(imageInstanceUID: String = iiuid)(ci: ConnectionInfo) =  
+    def cgetTest2(imageInstanceUID: String = iiuid)(ci: ConnectionInfo): IO[BufferedImage] =  
         import org.dcm4che3.imageio.plugins.dcm.*   // register "DICOM" ImageReader
         import org.dcm4che3.io.DicomInputStream
         import javax.imageio.ImageIO
@@ -95,11 +114,9 @@ object Demo extends IOApp:
             _ <- IO: 
                     println("Getting image from PACS server")
             _ <- r.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), dtag)
-            _ <- IO:
+            image <- IO:
                     val is = r.getImageStorage()
                     val dis = DicomInputStream(java.io.ByteArrayInputStream(is(imageInstanceUID).toByteArray()))
                     reader.setInput(dis)
-                    val i = reader.read(0, reader.getDefaultReadParam())
-                    val of = java.io.File(s"${imageInstanceUID}.png")
-                    javax.imageio.ImageIO.write(i, "png", of)
-        yield ()
+                    reader.read(0, reader.getDefaultReadParam())
+        yield image
