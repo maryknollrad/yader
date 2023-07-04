@@ -1,3 +1,5 @@
+package net.maryknollrad.ctdose
+
 import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
 import RetrieveLevel.*
 import DicomBase.StringTag
@@ -10,11 +12,12 @@ import scala.util.chaining.*
 import org.dcm4che3.imageio.plugins.dcm.*   
 import org.dcm4che3.io.DicomInputStream
 import javax.imageio.ImageIO
+import scala.util.matching.Regex.Match
 
 object CTDose:
-    case class Dose(ctvol: Double, dlp: Double)
+    case class DoseResultRaw(acno: String, ocrResult: String, image: BufferedImage)
     type ExtractionError = String
-    type DoseExtractor = String => Either[ExtractionError, Dose] // studyInstanceUID => dose or error
+    // type DoseExtractor = String => Either[ExtractionError, Dose] // studyInstanceUID => dose or error
     type FindResource = Resource[IO, CFind]
     type GetResource = Resource[IO, CGet]
 
@@ -75,7 +78,10 @@ object CTDose:
         gh.drawString(s, 20, 20)
         bi
 
-    def abc(ci: Configuration.ConnectionInfo) = 
+    def findDoubleStringInMatch(m: Match) = 
+        m.subgroups.flatMap(s => scala.util.Try(s.toDouble).toOption).headOption.getOrElse(-1.0)
+
+    def getCTDoses(ci: Configuration.ConnectionInfo, d: LocalDate = LocalDate.now()) = 
         import cats.syntax.all.*
 
         val r = for 
@@ -87,11 +93,11 @@ object CTDose:
             case (cfind, cget) =>
                 for             
                     // CTs Tags : Seq[Seq[StringTag]]
-                    ctsTags <- findCTStudies(cfind)
+                    ctsTags <- findCTStudies(cfind, d).map(_.take(2))
                     // find seriesInstanceUIDs using studyInstanceUID
                     // EitherSeriesesTags : Seq[Either[String, Seq[Seq[StringTag]]]] - collection of StringTag (Seq[StringTag]) per series (Seq[Seq[StringTag]])
-                    eSesTagss <- ctsTags.traverse(tags =>  
-                                val etag = tags.find(_.tag == Tag.StudyInstanceUID).toRight(s"Can't find StudyInstanceUID Tag (Accession Number : ${accessionNumber(tags)})")
+                    eSesTagss <- ctsTags.traverse(ctTags =>  
+                                val etag = ctTags.find(_.tag == Tag.StudyInstanceUID).toRight(s"Can't find StudyInstanceUID Tag (Accession Number : ${accessionNumber(ctTags)})")
                                 etag.map(t => findSeries(cfind, t.value)).sequence)
                     // find SOPInstanceUIDs using seriesInstanceUID
                     eImsTagss <- eSesTagss.traverse(eSesTags =>
@@ -122,8 +128,12 @@ object CTDose:
                                                 case Some(Left(l)) => Left(l)
                                                 case _ => Right(imUids.flatMap(_.toOption)))
                                     // get images using SOPInstanceUID and mark AccessionNumber
-                                    eImUIDANs.map(imUIDANs =>
+                                    eImUIDANs.traverse(imUIDANs =>
                                         imUIDANs.traverse((acno, uid) => 
-                                            getImage(cget, uid).map(bi => drawString(bi, acno)))).sequence)
+                                            getImage(cget, uid).map(bi => 
+                                                val ocrResult = Tesseract.doOCR(bi)
+                                                val marked = drawString(bi, acno)
+                                                DoseResultRaw(acno, ocrResult, marked)
+                                                ))))
                     (errs, bis) = eBIs.partition(_.isLeft)
                 yield (errs.flatMap(_.swap.toOption), bis.flatMap(_.toOption))  // flatten LEFTs and RIGHTs

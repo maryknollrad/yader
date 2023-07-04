@@ -1,3 +1,5 @@
+package net.maryknollrad.ctdose
+
 import org.ekrich.config.* 
 import java.io.File
 import scala.util.Try

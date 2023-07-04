@@ -1,4 +1,6 @@
 import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
+import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose}
+
 import DicomBase.*
 import java.time.{LocalDate, LocalTime, LocalDateTime}
 import java.time.format.DateTimeFormatter
@@ -17,16 +19,14 @@ object Demo extends IOApp:
     import DicomBase.{String2LocalDate, String2LocalTime, LocalDate2String}
 
     def run(as: List[String]): IO[ExitCode] = 
-        // loadConfigAndRun(dose) *> IO(ExitCode.Success)
         // loadConfigAndRun(printTodaysExams()) *> IO(ExitCode.Success)
         // loadConfigAndRun(cgetTest2(iiuid)).flatMap({
-        //     case im: BufferedImage => 
-        //         savepng(s"$iiuid.png", im)
+        //     case im: BufferedImage => IO(savepng(s"$iiuid.png", im))
         // })  *> IO(ExitCode.Success)
-        loadConfigAndRun(cgetTest2(iiuid)).flatMap({
-            case im: BufferedImage => 
-                ocr(im)
-        })  *> IO(ExitCode.Success)
+        // loadConfigAndRun(cgetTest2(iiuid)).flatMap({
+        //     case im: BufferedImage => IO(ocr(im))
+        // })  *> IO(ExitCode.Success)
+        loadConfigAndRun(dose) *> IO(ExitCode.Success)
 
     def loadConfigAndRun[A](f: ConnectionInfo => IO[A]) = 
         val c = Configuration()
@@ -39,22 +39,31 @@ object Demo extends IOApp:
                         f(ci)
         yield r 
 
-    def ocr(image: BufferedImage):IO[Unit] =
-        IO:
-            val r = Tesseract.doOCR(image)
-            println(r)
+    def ocr(image: BufferedImage) =
+        val r = Tesseract.doOCR(image)
+        println(r)
 
-    def dose(c: ConnectionInfo) = 
+    private val aquillionPrime = """Total DLP.+\(Head\):\s*([-.0-9]+)\s*\(Body\):\s*([-.0-9]+)""".r.unanchored
+
+    import scala.util.matching.Regex
+    def printIfFound(s: String, r: Regex) = 
+        r.findFirstMatchIn(s) match
+            case Some(m) => println(s"""$m => ${CTDose.findDoubleStringInMatch(m)}""")
+            case None => println("FAILED TO FIND DATA")
+
+    def dose(c: ConnectionInfo) =
         for 
-            t2 <- CTDose.abc(c)
-            _ <- IO:                
-                val (fails, imgs) = t2
-                println(s"Got ${fails.length} Failures and ${imgs.length} successful images.")
+            t2 <-CTDose.getCTDoses(c)
+            _ <- IO:
+                val (fails, successful) = t2
+                println(s"Got ${fails.length} Failures and ${successful.length} successful images.")
                 fails.zipWithIndex.foreach(println)
-                imgs.zipWithIndex.foreach: (is, i) => 
-                    is.zipWithIndex.foreach: (im, j) =>
-                        val of = java.io.File(s"$i-$j.png")
-                        javax.imageio.ImageIO.write(im, "png", of)
+                successful.zipWithIndex.foreach: 
+                    (rs, i) => 
+                        rs.zipWithIndex.foreach: 
+                            (doseResult, j) =>
+                                // savepng(s"$i-$j.png", doseResult.image)
+                                println(s"${doseResult.acno} ($i-$j) : ${printIfFound(doseResult.ocrResult, aquillionPrime)}")
         yield ()
 
     def printTodaysExams(modality: String = "CT")(ci: ConnectionInfo) = 
@@ -96,10 +105,9 @@ object Demo extends IOApp:
             _ <- r.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), dtag)
         yield ()
 
-    private def savepng(fname: String, image: BufferedImage): IO[Unit] = 
-        IO:
-            val of = java.io.File(fname)
-            javax.imageio.ImageIO.write(image, "png", of)
+    private def savepng(fname: String, image: BufferedImage) = 
+        val of = java.io.File(fname)
+        javax.imageio.ImageIO.write(image, "png", of)
 
     // store to buffer, and then convert to png file
     def cgetTest2(imageInstanceUID: String = iiuid)(ci: ConnectionInfo): IO[BufferedImage] =  

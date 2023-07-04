@@ -1,3 +1,5 @@
+package net.maryknollrad.ctdose
+
 import net.sourceforge.tess4j.*
 import java.awt.image.BufferedImage
 import java.io.File
