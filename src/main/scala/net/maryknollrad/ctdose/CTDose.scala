@@ -6,7 +6,7 @@ import DicomBase.StringTag
 import cats.effect.kernel.Resource
 import cats.effect.IO
 import java.time.LocalDate
-import org.dcm4che3.data.Tag
+import org.dcm4che3.data.{Tag, ElementDictionary}
 import java.awt.image.BufferedImage
 import scala.util.chaining.*
 import org.dcm4che3.imageio.plugins.dcm.*   
@@ -31,20 +31,28 @@ object CTDose:
             (IO(CGet(ci.callingAe, ci.calledAe, ci.host, ci.port, false)))
             (g => IO(g.shutdown()))
 
-    def findCTStudies(find: CFind, d: LocalDate = LocalDate.now()): IO[Seq[Seq[StringTag]]] = 
+    def gather2Map(tags: Seq[StringTag], level: String, beginMap: Map[String, String] = Map.empty) = 
+        tags.foldLeft(beginMap)((map, t) => 
+            val tagString = ElementDictionary.keywordOf(t.tag, null)
+            map.updated(s"${level.toUpperCase()}_${tagString}", t.value))
+
+    def findCTStudies(find: CFind, d: LocalDate): IO[Seq[Seq[StringTag]]] = 
         import DicomBase.LocalDate2String
-        val dtag = DicomTags((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, d:String),
-            Tag.AccessionNumber, Tag.PatientID, Tag.PatientName, Tag.PatientSex, 
+        val dtag = DicomTags((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, d:String), Tag.StudyTime, 
+            Tag.AccessionNumber, Tag.PatientID, Tag.PatientName, Tag.PatientSex, Tag.PatientBirthDate,
+            Tag.Manufacturer, Tag.ManufacturerModelName, Tag.CTDIvol, 
             Tag.StudyDescription, Tag.StudyInstanceUID)
 
         find.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, Some(StudyLevel), dtag)
 
     def findSeries(find: CFind, studyUid: String): IO[Seq[Seq[StringTag]]] = 
-        val dtag = DicomTags((Tag.StudyInstanceUID, studyUid), Tag.AccessionNumber, Tag.SeriesNumber, Tag.SeriesDescription, Tag.SeriesInstanceUID)
+        val dtag = DicomTags((Tag.StudyInstanceUID, studyUid), 
+            Tag.AccessionNumber, Tag.SeriesNumber, Tag.SeriesDescription, Tag.CTDIvol, Tag.SeriesInstanceUID)
 
         find.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, Some(SeriesLevel), dtag)
 
     def findImages(find: CFind, seriesUid: String): IO[Seq[Seq[StringTag]]] = 
+
         val dtag = DicomTags((Tag.SeriesInstanceUID, seriesUid), Tag.AccessionNumber, Tag.SOPInstanceUID)
 
         find.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, Some(ImageLevel), dtag)
@@ -96,19 +104,26 @@ object CTDose:
                     ctsTags <- findCTStudies(cfind, d).map(_.take(2))
                     // find seriesInstanceUIDs using studyInstanceUID
                     // EitherSeriesesTags : Seq[Either[String, Seq[Seq[StringTag]]]] - collection of StringTag (Seq[StringTag]) per series (Seq[Seq[StringTag]])
-                    eSesTagss <- ctsTags.traverse(ctTags =>  
+                    eSesTagssWithMap <- ctsTags.traverse(ctTags =>
+                                val studyMap = gather2Map(ctTags, "STUDY")
+                                // println(s"Got : $ctTags => Converted : $studyMap")
                                 val etag = ctTags.find(_.tag == Tag.StudyInstanceUID).toRight(s"Can't find StudyInstanceUID Tag (Accession Number : ${accessionNumber(ctTags)})")
-                                etag.map(t => findSeries(cfind, t.value)).sequence)
+                                etag.map(t => findSeries(cfind, t.value).map((_, studyMap))).sequence)
                     // find SOPInstanceUIDs using seriesInstanceUID
-                    eImsTagss <- eSesTagss.traverse(eSesTags =>
-                                val eSeTag = eSesTags.flatMap(seriesBySeriesNumber(_, 9000))
-                                eSeTag.flatMap(ts => 
+                    eImsTagssWithMap <- eSesTagssWithMap.traverse(eSesTagsWithMap =>
+                                val eSeriesMap = eSesTagsWithMap.map((seriesTags, studyMap) => 
+                                                    seriesTags.zipWithIndex.foldLeft(studyMap) :
+                                                        case (mergingMap, (stags, i)) => gather2Map(stags, s"S$i", mergingMap))
+                                // TODO: dose series selection should be configurable
+                                val eDoseSeriesTag = eSesTagsWithMap.flatMap((stags, _) => seriesBySeriesNumber(stags, 9000))
+                                val eDoseSeriesWithMap = eSeriesMap.flatMap(map => eDoseSeriesTag.map((_, map)))
+                                eDoseSeriesWithMap.flatMap((ts, map) => 
                                     ts.find(_.tag == Tag.SeriesInstanceUID)
-                                        .toRight(s"Can't find SeriesInstanceUID Tag (AccessionNumber : ${accessionNumber(ts)})"))
-                                .map(t => findImages(cfind, t.value)).sequence)
+                                        .toRight(s"Can't find SeriesInstanceUID Tag (AccessionNumber : ${accessionNumber(ts)})").map((_, map)))
+                                .map((t, map) => findImages(cfind, t.value).map((_, map))).sequence)
                     // convert each dose report series SOPInstanceUIDs => BufferedImages
-                    eBIs <- eImsTagss.traverse(eImsTags =>
-                                    val eImUIDANs: Either[String, Seq[(String, String)]] = eImsTags.flatMap(imsTags =>
+                    eBIsWithMap <- eImsTagssWithMap.traverse(eImsTags =>
+                                    val eImUIDANsWithMap: Either[String, (Seq[(String, String)],Map[String, String])] = eImsTags.flatMap((imsTags, map) =>
                                         if (imsTags.length == 0) then Left("DoseReport Series does not contains image")
                                         else
                                             val imUids = imsTags.map: imTags => 
@@ -126,14 +141,14 @@ object CTDose:
                                             // if any image is invalid than all is invalid
                                             imUids.find(_.isLeft) match 
                                                 case Some(Left(l)) => Left(l)
-                                                case _ => Right(imUids.flatMap(_.toOption)))
+                                                case _ => Right(imUids.flatMap(_.toOption)).map((_, map)))
                                     // get images using SOPInstanceUID and mark AccessionNumber
-                                    eImUIDANs.traverse(imUIDANs =>
+                                    eImUIDANsWithMap.traverse({ case (imUIDANs, map) =>
                                         imUIDANs.traverse((acno, uid) => 
                                             getImage(cget, uid).map(bi => 
                                                 val ocrResult = Tesseract.doOCR(bi)
                                                 val marked = drawString(bi, acno)
                                                 DoseResultRaw(acno, ocrResult, marked)
-                                                ))))
-                    (errs, bis) = eBIs.partition(_.isLeft)
+                                                )).map((_, map))}))
+                    (errs, bis) = eBIsWithMap.partition(_.isLeft)
                 yield (errs.flatMap(_.swap.toOption), bis.flatMap(_.toOption))  // flatten LEFTs and RIGHTs

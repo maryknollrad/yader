@@ -6,7 +6,8 @@ import org.dcm4che3.data.*
 
 object DicomBase:
     type QueryHandler[A] = (DicomTags, Attributes) => A
-    case class StringTag(tag: Int, value: String)
+    case class StringTag(tag: Int, value: String):
+        override def toString(): String = s"(${ElementDictionary.keywordOf(tag, null)}) : $value"
     type QueryTag = StringTag
     type RetrieveTag = Int
     type DicomTag = RetrieveTag | QueryTag
@@ -17,6 +18,10 @@ object DicomBase:
     given String2LocalDate:Conversion[String, LocalDate] = s => LocalDate.parse(s, DateTimeFormatter.BASIC_ISO_DATE)
     given String2LocalTime:Conversion[String, LocalTime] = s => LocalTime.parse(s, DicomTimeFormat)
     given Tup2StringAttribute: Conversion[Tuple2[Int, String], QueryTag] = t => StringTag(t._1, t._2)
+
+    // CONSIDER : tag gathering level in CTDose.getDoses function
+    // enum GatherLevel:
+    //     case GatherNone, StudyLevel, SeriesLevel, ImageLevel
 
 trait DicomBase:
     import DicomBase.* 

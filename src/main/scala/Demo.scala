@@ -59,7 +59,9 @@ object Demo extends IOApp:
                 println(s"Got ${fails.length} Failures and ${successful.length} successful images.")
                 fails.zipWithIndex.foreach(println)
                 successful.zipWithIndex.foreach: 
-                    (rs, i) => 
+                    case ((rs, map), i) => 
+                        println("-"*80)
+                        println(map)
                         rs.zipWithIndex.foreach: 
                             (doseResult, j) =>
                                 // savepng(s"$i-$j.png", doseResult.image)

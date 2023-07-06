@@ -122,8 +122,8 @@ case class CFind(val callingAe: String, val calledAe: String, val remoteHost: St
     def toTagArray(dtags: DicomTags, attr: Attributes): Seq[StringTag] =
         dtags.map: tag =>
             tag match 
-                case QueryTag(t, v) =>
-                    StringTag(t, v)
+                case t: QueryTag =>
+                    t
                 case t: RetrieveTag =>
                     StringTag(t, DicomTags.getStringTag(t, attr, encoding))
 
