@@ -12,7 +12,13 @@ object DicomBase:
     type RetrieveTag = Int
     type DicomTag = RetrieveTag | QueryTag
     type DicomTags = Seq[DicomTag]
+
+    // used in CTDose
     type TagValue = StringTag
+    type TagValues = Seq[TagValue]
+    type DicomMap = Map[String, String]
+    type QueryResult = (TagValues, DicomMap)
+    
     private val DicomTimeFormat = DateTimeFormatter.ofPattern("HHmmss")
     given LocalDate2String:Conversion[LocalDate, String] = (d: LocalDate) => d.format(DateTimeFormatter.BASIC_ISO_DATE)
     given String2LocalDate:Conversion[String, LocalDate] = s => LocalDate.parse(s, DateTimeFormatter.BASIC_ISO_DATE)

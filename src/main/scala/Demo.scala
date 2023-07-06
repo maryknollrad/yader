@@ -51,6 +51,11 @@ object Demo extends IOApp:
             case Some(m) => println(s"""$m => ${CTDose.findDoubleStringInMatch(m)}""")
             case None => println("FAILED TO FIND DATA")
 
+    def mapSummary(map: Map[String, String]) = 
+        map.keys.foreach: k =>
+            if k.startsWith("STUDY") then println(s"${k.drop(6)} : ${map(k)}")
+            if k.startsWith("I") then println(s"$k : ${map(k)}")
+
     def dose(c: ConnectionInfo) =
         for 
             t2 <-CTDose.getCTDoses(c)
@@ -61,7 +66,7 @@ object Demo extends IOApp:
                 successful.zipWithIndex.foreach: 
                     case ((rs, map), i) => 
                         println("-"*80)
-                        println(map)
+                        println(mapSummary(map))
                         rs.zipWithIndex.foreach: 
                             (doseResult, j) =>
                                 // savepng(s"$i-$j.png", doseResult.image)
