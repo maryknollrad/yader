@@ -5,15 +5,16 @@ import RetrieveLevel.*
 import DicomBase.*
 import cats.effect.kernel.Resource
 import cats.effect.IO
+import cats.data.EitherT
 import java.time.LocalDate
-import org.dcm4che3.data.{Tag, ElementDictionary}
+import org.dcm4che3.data.{Tag, ElementDictionary, Attributes}
 import java.awt.image.BufferedImage
 import scala.util.chaining.*
 import org.dcm4che3.imageio.plugins.dcm.*   
 import org.dcm4che3.io.DicomInputStream
 import javax.imageio.ImageIO
 import scala.util.matching.Regex.Match
-import org.dcm4che3.data.Attributes
+import cats.syntax.all.*
 
 object CTDose:
     case class DoseResultRaw(acno: String, ocrResult: String, image: BufferedImage)
@@ -21,6 +22,7 @@ object CTDose:
     // type DoseExtractor = String => Either[ExtractionError, Dose] // studyInstanceUID => dose or error
     type FindResource = Resource[IO, CFind]
     type GetResource = Resource[IO, CGet]
+    type SOPInstanceUIDExtractor[A] = (CGet, String) => IO[A]
 
     def findResource(ci: Configuration.ConnectionInfo) = 
         Resource.make
@@ -39,15 +41,14 @@ object CTDose:
 
     def findCTStudies(find: CFind, d: LocalDate): IO[Seq[Seq[StringTag]]] = 
         import DicomBase.LocalDate2String
-        val dtag = DicomTags((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, d:String), Tag.StudyTime, 
-            Tag.AccessionNumber, Tag.PatientID, Tag.PatientName, Tag.PatientSex, Tag.PatientBirthDate,
-            Tag.StudyDescription, Tag.StudyInstanceUID)
+        val dtag = DicomTags((Tag.ModalitiesInStudy, "CT"), (Tag.StudyDate, d:String),
+            Tag.AccessionNumber, Tag.StudyInstanceUID)
 
         find.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, Some(StudyLevel), dtag)
 
     def findSeries(find: CFind, studyUid: String): IO[Seq[Seq[StringTag]]] = 
         val dtag = DicomTags((Tag.StudyInstanceUID, studyUid), 
-            Tag.AccessionNumber, Tag.SeriesNumber, Tag.SeriesDescription, Tag.CTDIvol, Tag.SeriesInstanceUID)
+            Tag.AccessionNumber, Tag.SeriesNumber, Tag.SeriesDescription, Tag.SeriesInstanceUID)
 
         find.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, Some(SeriesLevel), dtag)
 
@@ -69,6 +70,15 @@ object CTDose:
                     (dicomReader.read(0, dicomReader.getDefaultReadParam()), attrs)
         yield imWithAttrs
 
+    private def getAttributes(get: CGet, sopInstanceUid: String): IO[Attributes] = 
+        for 
+            _ <- get.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), DicomTags((Tag.SOPInstanceUID, sopInstanceUid)))
+            attrs <- IO:
+                    val storage = get.getImageStorage()
+                    val dis = DicomInputStream(java.io.ByteArrayInputStream(storage.apply(sopInstanceUid.trim).toByteArray()))
+                    dis.readFileMetaInformation()
+        yield attrs
+
     private def seriesBySeriesNumber(sesTags: Seq[Seq[StringTag]], targetNumber: Int) = 
         val targetString = targetNumber.toString()
         sesTags.find(seTags => seTags.exists(t => t.tag == Tag.SeriesNumber && t.value == targetString))
@@ -89,12 +99,44 @@ object CTDose:
 
     def findDoubleStringInMatch(m: Match) = 
         m.subgroups.flatMap(s => scala.util.Try(s.toDouble).toOption).headOption.getOrElse(-1.0)
+        
+    private def gatherFirstSeriesFirstImageAttributes[A](ctTags: TagValues, extractor: SOPInstanceUIDExtractor[A] = getAttributes)(using cfind: CFind, cget: CGet): IO[Either[String, A]] =
+        for 
+            eSeTagss    <- 
+                            val etag = ctTags.find(_.tag == Tag.StudyInstanceUID).toRight(s"Can't find StudyInstanceUID Tag (Accession Number : ${accessionNumber(ctTags)})")
+                            etag.map(t => findSeries(cfind, t.value)).sequence
+            eImTagss    <- 
+                            val eFirstSeTags = eSeTagss.flatMap(_.headOption.toRight(s"Got no SeriesInstanceUID (Accession Number : ${accessionNumber(ctTags)})"))
+                            val eFirstSeUid = eFirstSeTags.flatMap(_.find(_.tag == Tag.SeriesInstanceUID).toRight(s"Cannot find SeriesInstanceUID tag (Accession Number : ${accessionNumber(ctTags)})"))
+                            eFirstSeUid.map(firstSeUid => findImages(cfind, firstSeUid.value)).sequence
+            eAttrs      <- 
+                            val eImTags = eImTagss.flatMap(_.headOption.toRight(s"Got no SOPInstanceUID (Accession Number : ${accessionNumber(ctTags)})"))
+                            val eImUid = eImTags.flatMap(_.find(_.tag == Tag.SOPInstanceUID).toRight(s"Cannot find SOPInstanceUID tag (Accession Number : ${accessionNumber(ctTags)})"))
+                            eImUid.map(imUid => extractor(cget, imUid.value)).sequence
+        yield eAttrs
 
-    import cats.syntax.all.*
+    private def gatherEachSeriesFirstImageAttributes[A](ctTags: TagValues, extractor: SOPInstanceUIDExtractor[A] = getAttributes)(using cfind: CFind, cget: CGet): IO[Either[String, Seq[A]]] =
+        for 
+            eSeTagss    <- 
+                            val etag = ctTags.find(_.tag == Tag.StudyInstanceUID).toRight(s"Can't find StudyInstanceUID tag (Accession Number : ${accessionNumber(ctTags)})")
+                            etag.map(t => findSeries(cfind, t.value)).sequence
+            eImTagsss   <- 
+                            val eSeUids = eSeTagss.flatMap(seTagss =>
+                                seTagss.map(_.find(_.tag == Tag.SeriesInstanceUID).toRight(s"Can't find SeriesInstanceUID tag (Accession Number : ${accessionNumber(ctTags)})")).sequence)
+                            eSeUids.map(_.map(seUid => findImages(cfind, seUid.value)).sequence).sequence
+            eAttrs      <- 
+                            val eFirstImTagss = eImTagsss.flatMap(imTagsss =>    // series.images.dicomtags
+                                    imTagsss.map(_.headOption.toRight(s"Series contains no images (Accession Number : ${accessionNumber(ctTags)})")).sequence)
+                            val eFirstImUids = eFirstImTagss.flatMap(firstImTagss =>
+                                    firstImTagss.map(_.find(_.tag == Tag.SOPInstanceUID).toRight(s"Got no SOPInstanceUID (Accession Number : ${accessionNumber(ctTags)})")).sequence)
+                            eFirstImUids.map(firstImUids => firstImUids.map(firstImUid => extractor(cget, firstImUid.value)).sequence).sequence
+        yield eAttrs
+
     // find seriesInstanceUIDs using studyInstanceUID
     // EitherSeriesesTags : Seq[Either[String, Seq[Seq[StringTag]]]] - collection of StringTag (Seq[StringTag]) per series (Seq[Seq[StringTag]])
-    private def gatherSeriesTags(ctsTags: Seq[TagValues])(using cfind: CFind): IO[Seq[Either[String, (Seq[TagValues], DicomMap)]]] = 
-        ctsTags.traverse(ctTags =>
+    // private def gatherSeriesTags(ctTagssWithAttrs: Seq[(TagValues, Either[String, Attributes])])(using cfind: CFind): IO[Seq[Either[String, (Seq[TagValues], DicomMap)]]] = 
+    private def gatherSeriesTags(ctTagss: Seq[TagValues])(using cfind: CFind): IO[Seq[Either[String, (Seq[TagValues], DicomMap)]]] = 
+        ctTagss.traverse(ctTags =>
             val studyMap = gather2Map(ctTags, "STUDY")
             val etag = ctTags.find(_.tag == Tag.StudyInstanceUID).toRight(s"Can't find StudyInstanceUID Tag (Accession Number : ${accessionNumber(ctTags)})")
             etag.map(t => findSeries(cfind, t.value).map((_, studyMap))).sequence)
@@ -158,11 +200,12 @@ object CTDose:
                 given CGet = cget
                 for
                     // CTs Tags : Seq[Seq[StringTag]]
-                    ctsTags <- findCTStudies(cfind, d).map(_.take(2))
-                    eSesTagssWithMap <- gatherSeriesTags(ctsTags)
+                    ctTagss             <- findCTStudies(cfind, d).map(_.take(2))
+                    // ctTagssWithAttrs    <- ctTagss.map(ctTags => gatherFirstSeriesFirstImageAttributes(ctTags).map((ctTags, _))).sequence
+                    eSesTagssWithMap    <- gatherSeriesTags(ctTagss)
                     // find SOPInstanceUIDs using seriesInstanceUID
-                    eImsTagssWithMap <- gatherImageTags(eSesTagssWithMap)
+                    eImsTagssWithMap    <- gatherImageTags(eSesTagssWithMap)
                     // convert each dose report series SOPInstanceUIDs => BufferedImages
-                    eBIsWithMap <- collectImagesAndOCR(eImsTagssWithMap)
-                    (errs, bis) = eBIsWithMap.partition(_.isLeft)
+                    eBIsWithMap         <- collectImagesAndOCR(eImsTagssWithMap)
+                    (errs, bis)         = eBIsWithMap.partition(_.isLeft)
                 yield (errs.flatMap(_.swap.toOption), bis.flatMap(_.toOption))  // flatten LEFTs and RIGHTs
