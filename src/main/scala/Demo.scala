@@ -11,6 +11,8 @@ import cats.effect.*
 import org.dcm4che3.data.Attributes
 import Configuration.ConnectionInfo
 import java.awt.image.BufferedImage
+import CTDose.DoseResultRaw
+// import org.slf4j.Logger
 
 case class CT(chartNo: String, patientName: String, patientSex: String, patientAge: Int, 
                 studyDateTime: LocalDateTime, description: String, studyID: String)
@@ -26,7 +28,10 @@ object Demo extends IOApp:
         // loadConfigAndRun(cgetTest2(iiuid)).flatMap({
         //     case im: BufferedImage => IO(ocr(im))
         // })  *> IO(ExitCode.Success)
-        loadConfigAndRun(dose) *> IO(ExitCode.Success)
+        // "trace", "debug", "info", "warn", "error" or "off"
+        System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error")
+        loadConfigAndRun(dose)
+        *> IO(ExitCode.Success)
 
     def loadConfigAndRun[A](f: ConnectionInfo => IO[A]) = 
         val c = Configuration()
@@ -58,15 +63,15 @@ object Demo extends IOApp:
 
     def dose(c: ConnectionInfo) =
         for 
-            t2 <-CTDose.getCTDoses(c)
+            t2:(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String]) <-CTDose.getCTDoses(c, encoding = "euc-kr")
             _ <- IO:
-                val (fails, successful) = t2
-                println(s"Got ${fails.length} Failures and ${successful.length} successful images.")
+                val (successes, fails) = t2
+                println(s"Got ${successes.length} successful images and ${fails.length} Failures.")
                 fails.zipWithIndex.foreach(println)
-                successful.zipWithIndex.foreach: 
-                    case ((rs, map), i) => 
+                successes.zipWithIndex.foreach: 
+                    case ((info, rs), i) => 
+                        println(info)
                         println("-"*80)
-                        println(mapSummary(map))
                         rs.zipWithIndex.foreach: 
                             (doseResult, j) =>
                                 // savepng(s"$i-$j.png", doseResult.image)

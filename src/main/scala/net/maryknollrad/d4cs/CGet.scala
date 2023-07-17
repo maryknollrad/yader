@@ -176,8 +176,8 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
 
     /* main.open */
     def getAssociation(request: AAssociateRQ) = Resource.make
-            (IO(ae.connect(conn, remote, request)))({ case as:Association => 
-                IO:
+            (IO.blocking(ae.connect(conn, remote, request)))({ case as:Association => 
+                IO.blocking:
                     as.waitForOutstandingRSP()
                     as.release()
             })
@@ -190,11 +190,11 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
         configureServiceClass(request, level.getOrElse(StudyLevel))
         addKeys(tags)
         getAssociation(request).use: as => 
-            IO:
-                val dimpseRespHandler = new DimseRSPHandler(as.nextMessageID()):
+            IO.blocking:
+                val dimseRespHandler = new DimseRSPHandler(as.nextMessageID()):
                     override def onDimseRSP(as: Association, cmd: Attributes, data: Attributes) =
                         super.onDimseRSP(as, cmd, data)
-                as.cget(cuid, priority, keys, null, dimpseRespHandler)
+                as.cget(cuid, priority, keys, null, dimseRespHandler)
 
     def getImageStorage() = imageStorage
 
