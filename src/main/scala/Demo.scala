@@ -63,7 +63,7 @@ object Demo extends IOApp:
 
     def dose(c: ConnectionInfo) =
         for 
-            t2:(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String]) <-CTDose.getCTDoses(c, encoding = "euc-kr")
+            t2:(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String]) <-CTDose.getCTDoses(c, d = LocalDate.now(), encoding = "euc-kr")
             _ <- IO:
                 val (successes, fails) = t2
                 println(s"Got ${successes.length} successful images and ${fails.length} Failures.")
@@ -135,8 +135,7 @@ object Demo extends IOApp:
                     println("Getting image from PACS server")
             _ <- r.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), dtag)
             image <- IO:
-                    val is = r.getImageStorage()
-                    val dis = DicomInputStream(java.io.ByteArrayInputStream(is(imageInstanceUID).toByteArray()))
+                    val dis = r.getDicomInputStreamAndFree(imageInstanceUID)
                     reader.setInput(dis)
                     reader.read(0, reader.getDefaultReadParam())
         yield image

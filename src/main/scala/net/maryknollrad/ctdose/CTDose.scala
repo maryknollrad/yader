@@ -61,21 +61,22 @@ object CTDose:
 
     private val dicomReader = ImageIO.getImageReadersByFormatName("DICOM").next()
 
-    private def getDicomStream(get: CGet, sopInstanceUid: String): IO[DicomInputStream] = 
+    private def getDicomStream(get: CGet, sopInstanceUid: String): IO[Either[String, DicomInputStream]] = 
         for 
             _ <- get.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), DicomTags((Tag.SOPInstanceUID, sopInstanceUid)))
         yield
-            val storage = get.getImageStorage()
-            DicomInputStream(java.io.ByteArrayInputStream(storage.apply(sopInstanceUid.trim).toByteArray()))
+            get.getDicomInputStreamAndFree(sopInstanceUid)
 
-    def getAttributes(get: CGet, sopInstanceUid: String): IO[Attributes] = 
-        getDicomStream(get, sopInstanceUid).map(_.readDataset) // .pipe(ioprint("GET ATTRIBUTE"))
+    def getAttributes(get: CGet, sopInstanceUid: String): IO[Either[String, Attributes]] = 
+        getDicomStream(get, sopInstanceUid).map(edis => edis.map(_.readDataset)) // .pipe(ioprint("GET ATTRIBUTE"))
 
-    def getImageWithAttributes(get: CGet, sopInstanceUid: String): IO[(BufferedImage, Attributes)] = 
-        getDicomStream(get, sopInstanceUid).map: dis =>
-            dicomReader.setInput(dis)
-            val attrs = dis.readDataset()
-            (dicomReader.read(0, dicomReader.getDefaultReadParam()), attrs)
+    def getImageWithAttributes(get: CGet, sopInstanceUid: String): IO[Either[String, (BufferedImage, Attributes)]] = 
+        getDicomStream(get, sopInstanceUid).map: edis =>
+            edis.map(dis => 
+                dicomReader.setInput(dis)
+                val attrs = dis.readDataset()
+                (dicomReader.read(0, dicomReader.getDefaultReadParam()), attrs)
+            )
 
     private def seriesBySeriesNumber(sesTags: Seq[Seq[StringTag]], targetNumber: Int) = 
         val targetString = targetNumber.toString()
@@ -153,10 +154,12 @@ object CTDose:
                     // CTs Tags : Seq[Seq[StringTag]]
                     ctTagss             <-  findCTStudies(cfind, d)
                     /* POSSIBLY IMPORTANT
-                       map(...).sequence is easier to read because metal informs current type
+                       map(...).sequence is easier to read than traverse because metal informs current type
                        but possibly map evaluated simultaneosly, causing strange results esp. dealing with external library
                     */
+                    // Series Tags : (StudyUID, Seq of each SeriesTags) per Study
                     seTagss             <-  ctTagss.traverse(ctTags => gatherSeries(ctTags))
+                    // SOPInstanceUID of 1st image of 1st series per Study
                     ct1SeImgUidsss      <-  seTagss.traverse(eSeTagss => 
                                                 eSeTagss.map{ case (stuid, seTags) => 
                                                     val firstSeriesTags = 
@@ -168,13 +171,15 @@ object CTDose:
                                                                 itags.headOption.toRight(s"Series contains no images (SeriesInstanceUID: $seuid)")
                                                                     .flatMap(_.find(_.tag == Tag.SOPInstanceUID).toRight(s"First Image contains no SOPInstanceUID tag (SeriesInstanceUID : $seuid})"))
                                                         ))
-                                                }.flatSequence  
+                                                }.flatSequence
                                                 /*  MAJOR CHANGES from sequence to flatSequence 
                                                     Either[IO[Either[(StringTag, StringTag, Seq[Seq[StringTag]])]]]
                                                     => IO[Either[(StringTag, StringTag, Seq[Seq[StringTag]])]] */
                                             )
-                    eattrs              <-  ct1SeImgUidsss.traverse(eImgUid => eImgUid.traverse(tag => 
+                    // Dicom Attributes of 1st image of 1st series per Study
+                    eattrs              <-  ct1SeImgUidsss.traverse(eImgUid => eImgUid.flatTraverse(tag => 
                                                 getAttributes(cget, tag.value)))
+                    // (Series Tags (Seq[TagValues]), Study Attributes from above Attributes (Seq[(Int, String)]), Manufacturer, Model) per Study
                     ctSeUidsWithInfos   =   seTagss.zip(eattrs).map:
                                                 case (eSeTagss, eAttr) =>
                                                     assert(seTagss.length == eattrs.length)
@@ -194,7 +199,8 @@ object CTDose:
                                                                         case _ =>
                                                                             (ncollect, oman, omod)
                                                             oman.flatMap(man => omod.map(mod => (seTagss._2, tagValues, man, mod))).toRight(s"Cannot find Manufacturer or Model in (StudyInstanceUID : ${seTagss._1})")
-                                                        ))                                        
+                                                        ))           
+                    // (Study Attributes, SOPInstanceUIDs of dose information series)
                     doseUidsWithInfo    <-  ctSeUidsWithInfos.traverse(eCTSeUids =>
                                                 eCTSeUids.map({ case (seTags, info, manufacturer, model) =>
                                                     val eDoseInfoSeries = seriesBySeriesNumber(seTags, 9000)
@@ -209,17 +215,20 @@ object CTDose:
                                                 }).flatSequence
                                             )
                     doseImagesWithInfo  <-  doseUidsWithInfo.traverse(eDoseUidWithInfo =>
-                                                eDoseUidWithInfo.traverse((info, imgUids) =>
+                                                eDoseUidWithInfo.flatTraverse((info, imgUids) =>
                                                     imgUids.traverse(imgUid => 
                                                         val acno = info.find(_._1 == Tag.AccessionNumber).map(_._2).getOrElse(s"No Accession Number ${imgUid.value}")
-                                                        getDicomStream(cget, imgUid.value).map(ds =>
-                                                            dicomReader.setInput(ds)
-                                                            val im = dicomReader.read(0, dicomReader.getDefaultReadParam())
-                                                            val ocrResult = Tesseract.doOCR(im)
-                                                            val marked = drawString(im, acno)
-                                                            DoseResultRaw(acno, ocrResult, marked)
+                                                        getDicomStream(cget, imgUid.value).map(edis =>
+                                                            edis.map(dis =>
+                                                                dicomReader.setInput(dis)
+                                                                val im = dicomReader.read(0, dicomReader.getDefaultReadParam())
+                                                                val ocrResult = Tesseract.doOCR(im)
+                                                                val marked = drawString(im, acno)
+                                                                DoseResultRaw(acno, ocrResult, marked)
+                                                            )
                                                         )
-                                                    ).map((info, _))
+                                                    ).map(eImUids => 
+                                                        eImUids.sequence.map((info, _)))
                                                 )
                                             )
                     (errs, bis)         = doseImagesWithInfo.partition(_.isLeft)

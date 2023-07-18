@@ -196,7 +196,11 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
                         super.onDimseRSP(as, cmd, data)
                 as.cget(cuid, priority, keys, null, dimseRespHandler)
 
-    def getImageStorage() = imageStorage
+    def getDicomInputStreamAndFree(sopInstanceUid: String) = 
+        val k = sopInstanceUid.trim
+        val r = imageStorage.get(k).map(ba => DicomInputStream(java.io.ByteArrayInputStream(ba.toByteArray()))).toRight(s"Cannot find SOPInstanceUID in memory $sopInstanceUid")
+        imageStorage -= k
+        r
 
     def shutdown() = 
         executorService.shutdown()
