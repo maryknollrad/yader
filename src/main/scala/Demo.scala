@@ -1,5 +1,5 @@
 import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
-import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo}
+import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo, SQLite}
 
 import DicomBase.*
 import java.time.{LocalDate, LocalTime, LocalDateTime}
@@ -31,8 +31,9 @@ object Demo extends IOApp:
         // })  *> IO(ExitCode.Success)
         // "trace", "debug", "info", "warn", "error" or "off"
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error")
-        Configuration.loadConfigAndRun(dose)
+        // Configuration.loadConfigAndRun(dose)
         // ct_info()
+        SQLite.createTablesIfNotExists()
         *> IO(ExitCode.Success)
 
     def ct_info() = 
