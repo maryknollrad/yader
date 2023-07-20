@@ -1,5 +1,5 @@
 import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
-import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose}
+import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo}
 
 import DicomBase.*
 import java.time.{LocalDate, LocalTime, LocalDateTime}
@@ -12,6 +12,7 @@ import org.dcm4che3.data.Attributes
 import Configuration.ConnectionInfo
 import java.awt.image.BufferedImage
 import CTDose.DoseResultRaw
+import CTDoseInfo.*
 // import org.slf4j.Logger
 
 case class CT(chartNo: String, patientName: String, patientSex: String, patientAge: Int, 
@@ -30,8 +31,12 @@ object Demo extends IOApp:
         // })  *> IO(ExitCode.Success)
         // "trace", "debug", "info", "warn", "error" or "off"
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error")
-        loadConfigAndRun(dose)
+        Configuration.loadConfigAndRun(dose)
+        // ct_info()
         *> IO(ExitCode.Success)
+
+    def ct_info() = 
+        IO.println(Configuration.ctInfo())
 
     def loadConfigAndRun[A](f: ConnectionInfo => IO[A]) = 
         val c = Configuration()
@@ -53,7 +58,7 @@ object Demo extends IOApp:
     import scala.util.matching.Regex
     def printIfFound(s: String, r: Regex) = 
         r.findFirstMatchIn(s) match
-            case Some(m) => println(s"""$m => ${CTDose.findDoubleStringInMatch(m)}""")
+            case Some(m) => println(s"""$m => ${CTDose.findFirstDoubleStringInMatch(m)}""")
             case None => println("FAILED TO FIND DATA")
 
     def mapSummary(map: Map[String, String]) = 
@@ -61,9 +66,9 @@ object Demo extends IOApp:
             if k.startsWith("STUDY") then println(s"${k.drop(6)} : ${map(k)}")
             if k.startsWith("I") then println(s"$k : ${map(k)}")
 
-    def dose(c: ConnectionInfo) =
+    def dose(c: ConnectionInfo, m: CTDoseInfo) =
         for 
-            t2:(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String]) <-CTDose.getCTDoses(c, d = LocalDate.now(), encoding = "euc-kr")
+            t2:(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String]) <-CTDose.getCTDoses(c, m, d = LocalDate.now(), encoding = "euc-kr")
             _ <- IO:
                 val (successes, fails) = t2
                 println(s"Got ${successes.length} successful images and ${fails.length} Failures.")
@@ -75,7 +80,8 @@ object Demo extends IOApp:
                         rs.zipWithIndex.foreach: 
                             (doseResult, j) =>
                                 // savepng(s"$i-$j.png", doseResult.image)
-                                println(s"${doseResult.acno} ($i-$j) : ${printIfFound(doseResult.ocrResult, aquillionPrime)}")
+                                // println(s"${doseResult.acno} ($i-$j) : ${printIfFound(doseResult.ocrRaw, aquillionPrime)}")
+                                println(s"${doseResult.acno} ($i-$j) : ${doseResult.ocrResult.getOrElse("FAILED TO FIND DATA")}")
         yield ()
 
     def printTodaysExams(modality: String = "CT")(ci: ConnectionInfo) = 

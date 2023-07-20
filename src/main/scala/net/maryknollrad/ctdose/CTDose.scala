@@ -18,7 +18,7 @@ import cats.syntax.all.*
 // import Demo.dose
 
 object CTDose:
-    case class DoseResultRaw(acno: String, ocrResult: String, image: BufferedImage)
+    case class DoseResultRaw(acno: String, ocrResult: Option[Double], ocrRaw: String, image: BufferedImage)
     type ExtractionError = String
     // type DoseExtractor = String => Either[ExtractionError, Dose] // studyInstanceUID => dose or error
     type FindResource = Resource[IO, CFind]
@@ -85,8 +85,8 @@ object CTDose:
 
     private def seriesByIndex(sesTags: Seq[Seq[StringTag]], index: Int) = 
         val seqSize = sesTags.size
-        val i = if index >= 0 then index min (seqSize - 1) else seqSize - (-index min sesTags.size)
-        sesTags(i)
+        val i = if index >= 0 then index min (seqSize - 1) else seqSize - (-index min seqSize)
+        sesTags(i).asRight[String]
 
     private def seriesBySeriesName(sesTags: Seq[TagValues], targetString: String) = 
         sesTags.find(seTags => seTags.exists(t => t.tag == Tag.SeriesDescription && t.value.contains(targetString)))
@@ -103,8 +103,8 @@ object CTDose:
         gh.drawString(s, 20, 20)
         bi
 
-    def findDoubleStringInMatch(m: Match) = 
-        m.subgroups.flatMap(s => scala.util.Try(s.toDouble).toOption).headOption.getOrElse(-1.0)
+    def findFirstDoubleStringInMatch(m: Match) = 
+        m.subgroups.flatMap(s => scala.util.Try(s.toDouble).toOption).headOption
 
     private def gatherSeries(ctTags: TagValues, maxNum: Option[Int] = None)(using cfind: CFind) : IO[Either[String, (TagValue, Seq[TagValues])]] = 
         ctTags
@@ -138,7 +138,7 @@ object CTDose:
 
     private def ioprint[A](msg: String = "")(ans: IO[A]) = ans.flatMap(a => IO({println(s"$msg : $a"); a}))
 
-    def getCTDoses(ci: Configuration.ConnectionInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int] = defaultCollectTags, encoding: String = "utf-8")
+    def getCTDoses(ci: Configuration.ConnectionInfo, diMap: CTDoseInfo.CTDoseInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int] = defaultCollectTags, encoding: String = "utf-8")
             :IO[(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String])] = 
         val r = for 
             cfind <- findResource(ci)
@@ -193,9 +193,9 @@ object CTDose:
                                                                     val ncollect = collect :+ (tag, svalue)
                                                                     tag match 
                                                                         case Tag.Manufacturer =>
-                                                                            (ncollect, Some(svalue), omod)
+                                                                            (ncollect, Some(svalue.toUpperCase()), omod)
                                                                         case Tag.ManufacturerModelName =>
-                                                                            (ncollect, oman, Some(svalue))
+                                                                            (ncollect, oman, Some(svalue.toUpperCase()))
                                                                         case _ =>
                                                                             (ncollect, oman, omod)
                                                             oman.flatMap(man => omod.map(mod => (seTagss._2, tagValues, man, mod))).toRight(s"Cannot find Manufacturer or Model in (StudyInstanceUID : ${seTagss._1})")
@@ -203,28 +203,55 @@ object CTDose:
                     // (Study Attributes, SOPInstanceUIDs of dose information series)
                     doseUidsWithInfo    <-  ctSeUidsWithInfos.traverse(eCTSeUids =>
                                                 eCTSeUids.map({ case (seTags, info, manufacturer, model) =>
-                                                    val eDoseInfoSeries = seriesBySeriesNumber(seTags, 9000)
+                                                    val edi = diMap.get((manufacturer, model)).toRight(s"Cannot find information of $manufacturer.$model")
+                                                    val eDoseInfoSeries: Either[String, Seq[StringTag]] = 
+                                                        edi.flatMap(di => 
+                                                            (di.seriesInfo.by, di.seriesInfo.value) match
+                                                                case (Some(CTDoseInfo.CTDoseSeries.SeriesNumber), Some(v: Int)) =>
+                                                                    seriesBySeriesNumber(seTags, v)
+                                                                case (Some(CTDoseInfo.CTDoseSeries.SeriesIndex), Some(v: Int)) =>
+                                                                    seriesByIndex(seTags, v)
+                                                                case (Some(CTDoseInfo.CTDoseSeries.SeriesName), Some(v: String)) =>
+                                                                    seriesBySeriesName(seTags, v)
+                                                                case _ =>
+                                                                    s"Wrong value or value does not exist in ...".asLeft[Seq[StringTag]]
+                                                        )
                                                     val eDiSeUid = eDoseInfoSeries.flatMap(dis => 
                                                         dis.find(_.tag == Tag.SeriesInstanceUID).toRight(s"Cannot find SeriesInstanceUID of dose info series ${accessionNumber(dis)}"))
                                                     eDiSeUid.map(diSeUid => 
                                                         findImages(cfind, diSeUid.value).map(itagss => 
                                                             val eiuids = itagss.traverse(tags =>
                                                                 tags.find(_.tag == Tag.SOPInstanceUID).toRight(s"Cannot find SOPInstanceUID ${accessionNumberOfInfo(info)}"))
-                                                            eiuids.map((info, _)))
+                                                            eiuids.map((info, _, manufacturer, model)))
                                                     ).flatSequence
                                                 }).flatSequence
                                             )
                     doseImagesWithInfo  <-  doseUidsWithInfo.traverse(eDoseUidWithInfo =>
-                                                eDoseUidWithInfo.flatTraverse((info, imgUids) =>
+                                                eDoseUidWithInfo.flatTraverse((info, imgUids, manufacturer, model) =>
+                                                    val ereg = diMap.get((manufacturer, model))
+                                                        .toRight(s"Cannot find information of $manufacturer.$model")
+                                                        .flatMap(_.seriesInfo.regex match
+                                                            case Some(s) if s.length > 0 =>
+                                                                scala.util.matching.Regex(s).unanchored.asRight
+                                                            case _ =>
+                                                                s"Regex value not exist or empty $manufacturer.$model".asLeft
+                                                        )
                                                     imgUids.traverse(imgUid => 
                                                         val acno = info.find(_._1 == Tag.AccessionNumber).map(_._2).getOrElse(s"No Accession Number ${imgUid.value}")
                                                         getDicomStream(cget, imgUid.value).map(edis =>
-                                                            edis.map(dis =>
-                                                                dicomReader.setInput(dis)
-                                                                val im = dicomReader.read(0, dicomReader.getDefaultReadParam())
-                                                                val ocrResult = Tesseract.doOCR(im)
-                                                                val marked = drawString(im, acno)
-                                                                DoseResultRaw(acno, ocrResult, marked)
+                                                            edis.flatMap(dis =>
+                                                                ereg.map(reg => 
+                                                                    dicomReader.setInput(dis)
+                                                                    val im = dicomReader.read(0, dicomReader.getDefaultReadParam())
+                                                                    val ocrResult = Tesseract.doOCR(im)
+                                                                    val marked = drawString(im, acno)
+                                                                    val finalResult = reg.findFirstMatchIn(ocrResult) match
+                                                                        case Some(m) =>
+                                                                            findFirstDoubleStringInMatch(m)
+                                                                        case _ =>
+                                                                            None
+                                                                    DoseResultRaw(acno, finalResult, ocrResult, marked)
+                                                                )
                                                             )
                                                         )
                                                     ).map(eImUids => 
