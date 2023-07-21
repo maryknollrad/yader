@@ -19,5 +19,6 @@ object CTDoseInfo:
                 case (ans, (f, fs)) => 
                     if f.isEmpty then ans :+ fs
                     else ans
-
-case class CTDoseSeriesInfo(manufacturer: String, model: String, seriesInfo: CTDoseInfo.DoseSeriesInfo)
+    
+    case class CTDoseSeriesInfo(manufacturer: String, model: String, seriesInfo: CTDoseInfo.DoseSeriesInfo)
+    case class CTDoseResult()

@@ -13,7 +13,8 @@ import CTDoseInfo.*
 object Configuration:
     case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
     type TesseractPath = String
-    
+    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, institution: List[String], storepng: Boolean)
+
     def ctInfo() = 
         val ctConf = Try(ConfigFactory.load("ct-info").getConfig("CTINFO"))
                         .toEither.left.map(e => List(s"Can't find ct-info.conf file or Config does not have CTINFO ${e.getMessage()}"))
@@ -70,7 +71,7 @@ object Configuration:
                     nerrs.asLeft[Map[(String, String), CTDoseSeriesInfo]]
             )
 
-    def apply(fname: String = "dicom"): Either[String, (ConnectionInfo,  TesseractPath)] =
+    def apply(fname: String = "dicom"): Either[String, CTDoseConfig] =
         val ifile = File(s"$fname.conf")
         if ifile.exists() then 
             Try:
@@ -83,17 +84,19 @@ object Configuration:
                     c.getString("encoding")
                 )
                 val tpath = c.getString("tesseract-path")
-                (ci, tpath)
+                val institutionNames = c.getStringList("institution").asScala.toList
+                val storepng = c.getBoolean("store-png")
+                CTDoseConfig(ci, tpath, institutionNames, storepng)
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")
 
-    def loadConfigAndRun[A](f: (ConnectionInfo, CTDoseInfo) => IO[A]) = 
+    def loadConfigAndRun[A](f: (CTDoseConfig, CTDoseInfo) => IO[A]) = 
         val c = Configuration().flatMap(c => ctInfo().map((c, _)))
         for 
             r <- c match
                     case Left(value) => 
                         IO(println(value))
-                    case Right(((ci, tp), m)) =>
-                        Tesseract.setTesseractPath(tp)
-                        f(ci, m)
+                    case Right((cdc, m)) =>
+                        Tesseract.setTesseractPath(cdc.tpath)
+                        f(cdc, m)
         yield r 

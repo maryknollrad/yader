@@ -31,24 +31,13 @@ object Demo extends IOApp:
         // })  *> IO(ExitCode.Success)
         // "trace", "debug", "info", "warn", "error" or "off"
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error")
-        // Configuration.loadConfigAndRun(dose)
+        Configuration.loadConfigAndRun(dose)
         // ct_info()
-        SQLite.createTablesIfNotExists()
+        // SQLite.createTablesIfNotExists()
         *> IO(ExitCode.Success)
 
     def ct_info() = 
         IO.println(Configuration.ctInfo())
-
-    def loadConfigAndRun[A](f: ConnectionInfo => IO[A]) = 
-        val c = Configuration()
-        for 
-            r <- c match
-                    case Left(value) => 
-                        IO(println(value))
-                    case Right((ci, tp)) =>
-                        Tesseract.setTesseractPath(tp)
-                        f(ci)
-        yield r 
 
     def ocr(image: BufferedImage) =
         val r = Tesseract.doOCR(image)
@@ -67,7 +56,7 @@ object Demo extends IOApp:
             if k.startsWith("STUDY") then println(s"${k.drop(6)} : ${map(k)}")
             if k.startsWith("I") then println(s"$k : ${map(k)}")
 
-    def dose(c: ConnectionInfo, m: CTDoseInfo) =
+    def dose(c: Configuration.CTDoseConfig, m: CTDoseInfo) =
         for 
             t2:(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String]) <-CTDose.getCTDoses(c, m, d = LocalDate.now(), encoding = "euc-kr")
             _ <- IO:

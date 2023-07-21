@@ -133,16 +133,16 @@ object CTDose:
         )
 
     val defaultCollectTags = Seq(Tag.AccessionNumber, Tag.PatientID, Tag.PatientSex, Tag.PatientBirthDate, 
-        Tag.StudyDescription, Tag.ProtocolName, Tag.StudyDate, Tag.StudyTime, 
-        Tag.BodyPartExamined, Tag.Manufacturer, Tag.ManufacturerModelName, Tag.StationName, Tag.OperatorsName)
+        Tag.StudyDescription, Tag.ProtocolName, Tag.StudyDate, Tag.StudyTime, Tag.BodyPartExamined, 
+        Tag.InstitutionName, Tag.Manufacturer, Tag.ManufacturerModelName, Tag.StationName, Tag.OperatorsName)
 
     private def ioprint[A](msg: String = "")(ans: IO[A]) = ans.flatMap(a => IO({println(s"$msg : $a"); a}))
 
-    def getCTDoses(ci: Configuration.ConnectionInfo, diMap: CTDoseInfo.CTDoseInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int] = defaultCollectTags, encoding: String = "utf-8")
+    def getCTDoses(config: Configuration.CTDoseConfig, diMap: CTDoseInfo.CTDoseInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int] = defaultCollectTags, encoding: String = "utf-8")
             :IO[(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String])] = 
         val r = for 
-            cfind <- findResource(ci)
-            cget <- getResource(ci)
+            cfind <- findResource(config.connectionInfo)
+            cget <- getResource(config.connectionInfo)
         yield (cfind, cget)
 
         r.use:
@@ -180,7 +180,7 @@ object CTDose:
                     eattrs              <-  ct1SeImgUidsss.traverse(eImgUid => eImgUid.flatTraverse(tag => 
                                                 getAttributes(cget, tag.value)))
                     // (Series Tags (Seq[TagValues]), Study Attributes from above Attributes (Seq[(Int, String)]), Manufacturer, Model) per Study
-                    ctSeUidsWithInfos   =   seTagss.zip(eattrs).map:
+                    ctSeUidsWithInfos   =   seTagss.zip(eattrs).map {
                                                 case (eSeTagss, eAttr) =>
                                                     assert(seTagss.length == eattrs.length)
                                                     eSeTagss.flatMap(seTagss => 
@@ -199,7 +199,13 @@ object CTDose:
                                                                         case _ =>
                                                                             (ncollect, oman, omod)
                                                             oman.flatMap(man => omod.map(mod => (seTagss._2, tagValues, man, mod))).toRight(s"Cannot find Manufacturer or Model in (StudyInstanceUID : ${seTagss._1})")
-                                                        ))           
+                                                        ))
+                                            }.filter(_ match
+                                                case Right((_, info, _, _)) =>
+                                                    info.find((t, v) => t == Tag.InstitutionName && config.institution.contains(v.toUpperCase())).nonEmpty
+                                                case _ => 
+                                                    false
+                                            )
                     // (Study Attributes, SOPInstanceUIDs of dose information series)
                     doseUidsWithInfo    <-  ctSeUidsWithInfos.traverse(eCTSeUids =>
                                                 eCTSeUids.map({ case (seTags, info, manufacturer, model) =>
