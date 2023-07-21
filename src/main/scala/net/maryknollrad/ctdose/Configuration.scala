@@ -13,7 +13,7 @@ import CTDoseInfo.*
 object Configuration:
     case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
     type TesseractPath = String
-    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, institution: List[String], storepng: Boolean)
+    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Boolean, encoding: String)
 
     def ctInfo() = 
         val ctConf = Try(ConfigFactory.load("ct-info").getConfig("CTINFO"))
@@ -21,7 +21,6 @@ object Configuration:
         ctConf.flatMap(conf =>
                 val (convergedMap, errs) = conf.entrySet.asScala.foldLeft((Map.empty[(String, String), CTDoseSeriesInfo], List.empty[String]))({ case ((dim, errs), e) =>
                     val ks = e.getKey().split('.').map(_.trim)
-                    // println(s"${e.getKey()} => ${ks.mkString(":")}")
                     if ks.length == 3 then
                         val (manu, mod) = (ks(0).filter(_ != '"'), ks(1).filter(_ != '"'))
                         val di = dim.getOrElse((manu, mod), CTDoseSeriesInfo(manu, mod, CTDoseInfo.DoseSeriesInfo()))
@@ -84,13 +83,15 @@ object Configuration:
                     c.getString("encoding")
                 )
                 val tpath = c.getString("tesseract-path")
-                val institutionNames = c.getStringList("institution").asScala.toList
+                val isDLP = c.getBoolean("doseDLP")
+                val institutionNames = c.getStringList("institution").asScala.toList.map(_.trim().toUpperCase())
                 val storepng = c.getBoolean("store-png")
-                CTDoseConfig(ci, tpath, institutionNames, storepng)
+                val encoding = c.getString("encoding")
+                CTDoseConfig(ci, tpath, isDLP, institutionNames, storepng, encoding)
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")
 
-    def loadConfigAndRun[A](f: (CTDoseConfig, CTDoseInfo) => IO[A]) = 
+    def loadConfigAndRun[A](f: (CTDoseConfig, CTInfo) => IO[A]) = 
         val c = Configuration().flatMap(c => ctInfo().map((c, _)))
         for 
             r <- c match

@@ -15,6 +15,7 @@ import org.dcm4che3.io.DicomInputStream
 import javax.imageio.ImageIO
 import scala.util.matching.Regex.Match
 import cats.syntax.all.*
+import net.maryknollrad.ctdose.CTDoseInfo.CTDoseResult
 // import Demo.dose
 
 object CTDose:
@@ -132,14 +133,16 @@ object CTDose:
             ).sequence
         )
 
-    val defaultCollectTags = Seq(Tag.AccessionNumber, Tag.PatientID, Tag.PatientSex, Tag.PatientBirthDate, 
-        Tag.StudyDescription, Tag.ProtocolName, Tag.StudyDate, Tag.StudyTime, Tag.BodyPartExamined, 
+    // should match study table fields, first 4 tags must be patient ID, sex, birthday, accession number
+    private val defaultCollectTags = Seq(Tag.PatientID, Tag.PatientSex, Tag.PatientBirthDate, Tag.AccessionNumber, 
+        Tag.StudyDate, Tag.StudyTime, Tag.StudyDescription, Tag.ProtocolName, Tag.BodyPartExamined, 
         Tag.InstitutionName, Tag.Manufacturer, Tag.ManufacturerModelName, Tag.StationName, Tag.OperatorsName)
+    def getDefaultCollectTags() = defaultCollectTags
 
     private def ioprint[A](msg: String = "")(ans: IO[A]) = ans.flatMap(a => IO({println(s"$msg : $a"); a}))
 
-    def getCTDoses(config: Configuration.CTDoseConfig, diMap: CTDoseInfo.CTDoseInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int] = defaultCollectTags, encoding: String = "utf-8")
-            :IO[(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String])] = 
+    def getCTDoses(config: Configuration.CTDoseConfig, diMap: CTDoseInfo.CTInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int] = defaultCollectTags)
+            :IO[(Seq[CTDoseResult], Seq[String])] = 
         val r = for 
             cfind <- findResource(config.connectionInfo)
             cget <- getResource(config.connectionInfo)
@@ -152,7 +155,7 @@ object CTDose:
                 val startTime = System.nanoTime()
                 for
                     // CTs Tags : Seq[Seq[StringTag]]
-                    ctTagss             <-  findCTStudies(cfind, d)
+                    ctTagss             <-  findCTStudies(cfind, d, Some(2))
                     /* POSSIBLY IMPORTANT
                        map(...).sequence is easier to read than traverse because metal informs current type
                        but possibly map evaluated simultaneosly, causing strange results esp. dealing with external library
@@ -188,7 +191,7 @@ object CTDose:
                                                             val (tagValues, oman, omod) = collectTags.foldLeft((Seq.empty[(Int, String)], Option.empty[String], Option.empty[String])):
                                                                 case ((collect, oman, omod), tag) =>
                                                                     val svalue = Option(attr.getBytes(tag))
-                                                                            .map(s => String(s, encoding).trim)
+                                                                            .map(s => String(s, config.encoding).trim)
                                                                             .getOrElse(s"*Empty ${ElementDictionary.keywordOf(tag, null)}")
                                                                     val ncollect = collect :+ (tag, svalue)
                                                                     tag match 
@@ -200,6 +203,7 @@ object CTDose:
                                                                             (ncollect, oman, omod)
                                                             oman.flatMap(man => omod.map(mod => (seTagss._2, tagValues, man, mod))).toRight(s"Cannot find Manufacturer or Model in (StudyInstanceUID : ${seTagss._1})")
                                                         ))
+                                                // filter out other hospital's exam
                                             }.filter(_ match
                                                 case Right((_, info, _, _)) =>
                                                     info.find((t, v) => t == Tag.InstitutionName && config.institution.contains(v.toUpperCase())).nonEmpty
@@ -232,6 +236,7 @@ object CTDose:
                                                     ).flatSequence
                                                 }).flatSequence
                                             )
+                    // (Study Attributes, OCR results of dose series images)
                     doseImagesWithInfo  <-  doseUidsWithInfo.traverse(eDoseUidWithInfo =>
                                                 eDoseUidWithInfo.flatTraverse((info, imgUids, manufacturer, model) =>
                                                     val ereg = diMap.get((manufacturer, model))
@@ -265,4 +270,8 @@ object CTDose:
                                                 )
                                             )
                     (errs, bis)         = doseImagesWithInfo.partition(_.isLeft)
-                yield (bis.flatMap(_.toOption), errs.flatMap(_.swap.toOption))  // flatten RIGHTs and LEFTs
+                yield {
+                    val rights = bis.flatMap(_.toOption).map(t => CTDoseResult(t._1, t._2))
+                    val lefts = errs.flatMap(_.swap.toOption)  // flatten RIGHTs and LEFTs
+                    (rights, lefts)
+                }

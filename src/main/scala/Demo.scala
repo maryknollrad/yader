@@ -1,5 +1,6 @@
 import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
-import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo, SQLite}
+import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo}
+import net.maryknollrad.ctdose.SQLite
 
 import DicomBase.*
 import java.time.{LocalDate, LocalTime, LocalDateTime}
@@ -13,6 +14,7 @@ import Configuration.ConnectionInfo
 import java.awt.image.BufferedImage
 import CTDose.DoseResultRaw
 import CTDoseInfo.*
+import org.dcm4che3.data.ElementDictionary
 // import org.slf4j.Logger
 
 case class CT(chartNo: String, patientName: String, patientSex: String, patientAge: Int, 
@@ -31,10 +33,18 @@ object Demo extends IOApp:
         // })  *> IO(ExitCode.Success)
         // "trace", "debug", "info", "warn", "error" or "off"
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error")
-        Configuration.loadConfigAndRun(dose)
+        // Configuration.loadConfigAndRun(dose)
         // ct_info()
         // SQLite.createTablesIfNotExists()
+        // tagTest()
+        Configuration.loadConfigAndRun({
+            case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now(), Some(CTDose.getDefaultCollectTags()))})
         *> IO(ExitCode.Success)
+
+    def tagTest() = 
+        // IO.println(CTDose.getDefaultCollectTags().map(t =>
+        //     s"${ElementDictionary.keywordOf(t, null)} : ${ElementDictionary.vrOf(t, null)}").mkString(","))
+        IO.println(SQLite.createStudyTableSQL(CTDose.getDefaultCollectTags()).toString)
 
     def ct_info() = 
         IO.println(Configuration.ctInfo())
@@ -43,7 +53,7 @@ object Demo extends IOApp:
         val r = Tesseract.doOCR(image)
         println(r)
 
-    private val aquillionPrime = """Total DLP.+\(Head\):\s*([-.0-9]+)\s*\(Body\):\s*([-.0-9]+)""".r.unanchored
+    // private val aquillionPrime = """Total DLP.+\(Head\):\s*([-.0-9]+)\s*\(Body\):\s*([-.0-9]+)""".r.unanchored
 
     import scala.util.matching.Regex
     def printIfFound(s: String, r: Regex) = 
@@ -56,18 +66,18 @@ object Demo extends IOApp:
             if k.startsWith("STUDY") then println(s"${k.drop(6)} : ${map(k)}")
             if k.startsWith("I") then println(s"$k : ${map(k)}")
 
-    def dose(c: Configuration.CTDoseConfig, m: CTDoseInfo) =
+    def dose(c: Configuration.CTDoseConfig, m: CTInfo) =
         for 
-            t2:(Seq[(Seq[(Int, String)], Seq[DoseResultRaw])], Seq[String]) <-CTDose.getCTDoses(c, m, d = LocalDate.now(), encoding = "euc-kr")
+            t2:(Seq[CTDoseResult], Seq[String]) <-CTDose.getCTDoses(c, m, d = LocalDate.now())
             _ <- IO:
                 val (successes, fails) = t2
                 println(s"Got ${successes.length} successful images and ${fails.length} Failures.")
                 fails.zipWithIndex.foreach(println)
                 successes.zipWithIndex.foreach: 
-                    case ((info, rs), i) => 
-                        println(info)
+                    case (cdr, i) => 
+                        println(cdr.studyInfo.toMap)
                         println("-"*80)
-                        rs.zipWithIndex.foreach: 
+                        cdr.results.zipWithIndex.foreach: 
                             (doseResult, j) =>
                                 // savepng(s"$i-$j.png", doseResult.image)
                                 // println(s"${doseResult.acno} ($i-$j) : ${printIfFound(doseResult.ocrRaw, aquillionPrime)}")
