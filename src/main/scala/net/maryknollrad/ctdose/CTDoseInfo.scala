@@ -35,6 +35,8 @@ object CTDoseInfo:
     case class CTDoseSeriesInfo(manufacturer: String, model: String, seriesInfo: CTDoseInfo.DoseSeriesInfo)
     case class CTDoseResult(studyInfo: Seq[(Int, String)], results: Seq[DoseResultRaw])
 
+    type DBField = String | LocalDate | LocalTime | Double | Option[Array[Byte]]
+
     def makeInsertables(cdr: CTDoseResult, ctags: Seq[Int], storeflag: Boolean) = 
         val imap = cdr.studyInfo.toMap
         val doseResult = cdr.results.find(_.ocrResult.nonEmpty)
@@ -43,14 +45,17 @@ object CTDoseInfo:
             if storeflag then doseResult.map(dr =>
                 val os = ByteArrayOutputStream()
                 ImageIO.write(dr.image, "png", os) 
-                Some(os.toByteArray())
+                os.toByteArray()
             ) else 
                 None
-        val study0 = (imap(Tag.AccessionNumber), imap(Tag.PatientID))
-        val study1 = Tuple.fromArray(ctags.drop(4).map(imap).toArray)
-        val study2 = (dose, img)
+        // val study0 = (imap(Tag.AccessionNumber), imap(Tag.PatientID))
+        // val study1 = Tuple.fromArray(ctags.drop(4).map(imap).toArray)
+        // val study2 = (dose, img)
+        val study0:Seq[DBField] = Seq(imap(Tag.AccessionNumber), imap(Tag.PatientID))
+        val study1:Seq[DBField] = ctags.drop(4).map(imap)
+        val study2:Seq[DBField] = Seq(dose, img)
 
-        val patient = (imap(Tag.PatientID), imap(Tag.PatientSex), imap(Tag.PatientBirthDate))
+        val patient: Seq[DBField] = Seq(imap(Tag.PatientID), imap(Tag.PatientSex), imap(Tag.PatientBirthDate))
 
         (study0 ++ study1 ++ study2, patient)
 

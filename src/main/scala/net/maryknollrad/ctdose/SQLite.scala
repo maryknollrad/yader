@@ -8,7 +8,9 @@ import org.dcm4che3.data.ElementDictionary
 import javax.lang.model.element.Element
 import scala.util.chaining.* 
 import org.dcm4che3.data.VR
-import scala.runtime.TupleXXL
+import java.time.{LocalDate, LocalTime}
+import doobie.implicits.javatimedrivernative._
+import net.maryknollrad.ctdose.CTDoseInfo.DBField
 
 object SQLite:
     val xa = Transactor.fromDriverManager[IO](
@@ -63,12 +65,24 @@ object SQLite:
         | INSERT INTO log (logtype = $ltype, content = $msg)
         """.stripMargin.update.run
 
-    def insertStudyAndPatient(study: Tuple, patient: (String, String, String)) = 
+    def insertStudyAndPatient(study: Tuple, patient: Tuple) = 
+        /* given Write[DBField] = Write[DBField].contramap((f: DBField) =>
+                f match
+                    case v: String => v // Write[String]
+                    case v: Double => v // Write[Double]
+                    case v: LocalDate => v // rite[LocalDate]
+                    case v: LocalTime => v // Write[LocalTime]
+                    case v: Option[Array[Byte]] => v // Write[Option[Array[Byte]]]
+            )
+        given sDbWriter: Write[Seq[DBField]] = Write[Seq[DBField]].contramap(dbs => dbs)
+        */
         val sql = "INSERT INTO study VALUES (" ++ Range(0, study.size).map(_ => "?").mkString(", ") ++ ")"
-        val studyInsert = HC.prepareStatement(sql)(HPS.set(study)).update.run
-        val patientInsert = sql"""
-        | INSERT INTO patient VALUES (${patient(0)}, ${patient(1)}, ${patient(2)})
-        | ON CONFLICT DO NOTHING
-        """.stripMargin.update.run
+        val studyInsert = HC.prepareStatement(sql)(HPS.set(study))
+
+        // val patientInsert = sql"""
+        // | INSERT INTO patient VALUES (${patient(0)}, ${patient(1)}, ${patient(2)})
+        // | ON CONFLICT DO NOTHING
+        // """.stripMargin.update.run        
+        val patientInsert = HC.prepareStatement("""INSERT INTO patient VALUES (?, ?, ?) ON CONFLICT DO NOTHING""")(HPS.set(patient))
 
         IO.unit
