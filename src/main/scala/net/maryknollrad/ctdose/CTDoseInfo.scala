@@ -11,6 +11,9 @@ import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import cats.effect.IO
 import cats.syntax.all.* 
+import scala.util.Try
+import DB.{Study, Patient}
+import net.maryknollrad.ctdose.SQLite.log
 
 object CTDoseInfo:
     type CTInfo = Map[(String, String), CTDoseSeriesInfo]
@@ -35,48 +38,51 @@ object CTDoseInfo:
     case class CTDoseSeriesInfo(manufacturer: String, model: String, seriesInfo: CTDoseInfo.DoseSeriesInfo)
     case class CTDoseResult(studyInfo: Seq[(Int, String)], results: Seq[DoseResultRaw])
 
-    type DBField = String | LocalDate | LocalTime | Double | Option[Array[Byte]]
-
-    def makeInsertables(cdr: CTDoseResult, ctags: Seq[Int], storeflag: Boolean) = 
+    def makeInsertables(cdr: CTDoseResult, ctags: Seq[Int], storeflag: Option[String]): Either[String, (Study, Patient, Option[IO[Boolean]])] = 
         val imap = cdr.studyInfo.toMap
         val doseResult = cdr.results.find(_.ocrResult.nonEmpty)
         val dose = doseResult.flatMap(_.ocrResult).getOrElse(-1.0)
-        val img = 
-            if storeflag then doseResult.map(dr =>
-                val os = ByteArrayOutputStream()
-                ImageIO.write(dr.image, "png", os) 
-                os.toByteArray()
-            ) else 
-                None
-        // val study0 = (imap(Tag.AccessionNumber), imap(Tag.PatientID))
-        // val study1 = Tuple.fromArray(ctags.drop(4).map(imap).toArray)
-        // val study2 = (dose, img)
-        val study0:Seq[DBField] = Seq(imap(Tag.AccessionNumber), imap(Tag.PatientID))
-        val study1:Seq[DBField] = ctags.drop(4).map(imap)
-        val study2:Seq[DBField] = Seq(dose, img)
+        for 
+            study   <- Try {
+                        Study(imap(Tag.AccessionNumber), imap(Tag.PatientID), 
+                            LocalDate.parse(imap(Tag.StudyDate), DateTimeFormatter.ISO_LOCAL_DATE), 
+                            LocalTime.parse(imap(Tag.StudyTime), DateTimeFormatter.ISO_LOCAL_TIME),
+                            imap(Tag.StudyDescription), imap(Tag.ProtocolName), imap(Tag.BodyPartExamined), 
+                            imap(Tag.Manufacturer), imap(Tag.ManufacturerModelName), imap(Tag.StationName), 
+                            imap(Tag.OperatorsName), dose) 
+                        }.toEither.left.map(t => s"Error occurred during preparing study : ${t.getMessage()}")
+            patient <- Try(
+                        DB.Patient(imap(Tag.PatientID), imap(Tag.PatientSex).trim.head, 
+                            LocalDate.parse(imap(Tag.PatientBirthDate), DateTimeFormatter.ISO_LOCAL_DATE)
+                        )).toEither.left.map(t => s"Error occurred during preparing patient : ${t.getMessage()}")
+            imgIO   =  storeflag.flatMap(p =>
+                            doseResult.map(dr => IO {
+                                val fname = java.nio.file.Paths.get(".", p, study.accessionNumber)
+                                val of = fname.toFile()
+                                javax.imageio.ImageIO.write(dr.image, "png", of)
+                            }))
+        yield (study, patient, imgIO)
 
-        val patient: Seq[DBField] = Seq(imap(Tag.PatientID), imap(Tag.PatientSex), imap(Tag.PatientBirthDate))
+    private def logMsg(d: LocalDate, successes: Seq[CTDoseResult], fails: Seq[String], store: Seq[Either[String, _]], startTime: Long) = 
+        val dStr = d.format(DateTimeFormatter.BASIC_ISO_DATE)
+        val (storeSuccesses, storeFails) = store.partition(_.isRight).bimap(_.flatMap(_.toOption), _.flatMap(_.swap.toOption))
+        s"$dStr : ${successes.length} successful and ${fails.length} failed DICOM operations. " ++
+            s"${storeSuccesses.length} successful ${storeFails.length} DB operations in ${System.currentTimeMillis() - startTime}ms. " ++
+            s"${(fails ++ storeFails).mkString("Failure messages : [", ",", "]")}"
 
-        (study0 ++ study1 ++ study2, patient)
-
-    /*
-    type DBField = String | LocalDate | LocalTime | Double | Option[Array[Byte]]
-    type A = String *: String *: (scala.Tuple match {
-            case scala.EmptyTuple => (scala.Double, Option[Some[Array[Byte]]])
-            case x1 *: xs1 => x1 *: scala.Tuple.Concat[xs1, (scala.Double, Option[Some[Array[Byte]]])]
-        } <: scala.Tuple
-    */
     def getDoseReportAndStore(conf: Configuration.CTDoseConfig, ctInfo: CTInfo, d: LocalDate = LocalDate.now(), collectTags: Option[Seq[Int]] = None) = 
         val startTime = System.currentTimeMillis
         val ctags = collectTags.getOrElse(CTDose.getDefaultCollectTags())
         for
             _                   <-  SQLite.createTablesIfNotExists(ctags)
             successesAndFails   <-  CTDose.getCTDoses(conf, ctInfo, d, ctags)
-            (successes, fails)  = successesAndFails
-            // midtime             = System.currentTimeMillis()
-            // _                   <-  IO.println(s"${d.format(DateTimeFormatter.BASIC_ISO_DATE)} : ${successes.length} successful and ${fails.length} failed DICOM operations in ${System.currentTimeMillis() - startTime}ms. ${fails.mkString("Failure messages : [", ",", "]")}")
-            _                   <-  successes.map(makeInsertables(_, CTDose.getDefaultCollectTags(), conf.storepng))
-                                        .traverse(t => 
-                                            SQLite.insertStudyAndPatient(t._1, t._2))
-            _                   <-  SQLite.log(s"${d.format(DateTimeFormatter.BASIC_ISO_DATE)} : ${successes.length} successful and ${fails.length} failed DICOM operations in ${System.currentTimeMillis() - startTime}ms. ${fails.mkString("Failure messages : [", ",", "]")}").transact(SQLite.xa)
+            (successes, fails)  =   successesAndFails
+            stored              <-  successes.traverse(cdr =>
+                                        makeInsertables(cdr, CTDose.getDefaultCollectTags(), conf.storepng)
+                                            .traverse({
+                                                case (study, patient, oIo) =>
+                                                    SQLite.insertStudyAndPatient(study, patient)
+                                                    *> oIo.traverse(io => io)
+                                            }))
+            _                   <-  SQLite.log(logMsg(d, successes, fails, stored, startTime)).transact(SQLite.xa)
         yield ()

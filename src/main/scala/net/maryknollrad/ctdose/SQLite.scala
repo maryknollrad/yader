@@ -10,7 +10,7 @@ import scala.util.chaining.*
 import org.dcm4che3.data.VR
 import java.time.{LocalDate, LocalTime}
 import doobie.implicits.javatimedrivernative._
-import net.maryknollrad.ctdose.CTDoseInfo.DBField
+import DB.*
 
 object SQLite:
     val xa = Transactor.fromDriverManager[IO](
@@ -38,7 +38,7 @@ object SQLite:
         | CREATE TABLE IF NOT EXISTS study
         | (acno TEXT NOT NULL, patient_id TEXT NOT NULL REFERENCES patient (id),
         """.stripMargin ++ midFields.mkString(", ") ++ """,
-        | dose_value REAL NOT NULL DEFAULT 0.0, img BLOB)
+        | dose_value REAL NOT NULL DEFAULT 0.0)
         """.stripMargin
         Fragment.const(createSQL)
 
@@ -65,24 +65,7 @@ object SQLite:
         | INSERT INTO log (logtype = $ltype, content = $msg)
         """.stripMargin.update.run
 
-    def insertStudyAndPatient(study: Tuple, patient: Tuple) = 
-        /* given Write[DBField] = Write[DBField].contramap((f: DBField) =>
-                f match
-                    case v: String => v // Write[String]
-                    case v: Double => v // Write[Double]
-                    case v: LocalDate => v // rite[LocalDate]
-                    case v: LocalTime => v // Write[LocalTime]
-                    case v: Option[Array[Byte]] => v // Write[Option[Array[Byte]]]
-            )
-        given sDbWriter: Write[Seq[DBField]] = Write[Seq[DBField]].contramap(dbs => dbs)
-        */
-        val sql = "INSERT INTO study VALUES (" ++ Range(0, study.size).map(_ => "?").mkString(", ") ++ ")"
-        val studyInsert = HC.prepareStatement(sql)(HPS.set(study))
-
-        // val patientInsert = sql"""
-        // | INSERT INTO patient VALUES (${patient(0)}, ${patient(1)}, ${patient(2)})
-        // | ON CONFLICT DO NOTHING
-        // """.stripMargin.update.run        
-        val patientInsert = HC.prepareStatement("""INSERT INTO patient VALUES (?, ?, ?) ON CONFLICT DO NOTHING""")(HPS.set(patient))
-
-        IO.unit
+    def insertStudyAndPatient(study: Study, patient: Patient) = 
+        val studyInsert = sql"""INSERT INTO study VALUES ($study)""".update.run
+        val patientInsert = sql"""INSERT INTO patient VALUES ($patient) ON CONFLICT DO NOTHING""".update.run
+        studyInsert.combine(patientInsert).transact(xa)

@@ -13,7 +13,7 @@ import CTDoseInfo.*
 object Configuration:
     case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
     type TesseractPath = String
-    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Boolean, encoding: String)
+    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Option[String], encoding: String)
 
     def ctInfo() = 
         val ctConf = Try(ConfigFactory.load("ct-info").getConfig("CTINFO"))
@@ -85,7 +85,7 @@ object Configuration:
                 val tpath = c.getString("tesseract-path")
                 val isDLP = c.getBoolean("doseDLP")
                 val institutionNames = c.getStringList("institution").asScala.toList.map(_.trim().toUpperCase())
-                val storepng = c.getBoolean("store-png")
+                val storepng = if c.hasPath("store-png") then Some(c.getString("store-png")) else None
                 val encoding = c.getString("encoding")
                 CTDoseConfig(ci, tpath, isDLP, institutionNames, storepng, encoding)
             .toEither.left.map(_.getMessage())
