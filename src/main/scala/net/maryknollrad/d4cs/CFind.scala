@@ -42,7 +42,7 @@ case class CFind(val callingAe: String, val calledAe: String, val remoteHost: St
     private val executorService = Executors.newSingleThreadExecutor()
     private val scheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 
-    private val log = LoggerFactory.getLogger(getClass)
+    private val logger = LoggerFactory.getLogger(getClass)
 
     /* FindSCU.main */
 
@@ -87,9 +87,9 @@ case class CFind(val callingAe: String, val calledAe: String, val remoteHost: St
     // customn setup - query 함수에 maxNum을 인자로 주었을 때 cancel 호출하면 ApplicationEntity에 dimseRQHandler가 호출돠며 지정하지 않으면 없다고 에러 log
     private val dimseRQHandler = new DimseRQHandler():
         override def onDimseRQ(as: Association, pc: PresentationContext, dimse: Dimse, cmd: Attributes, data: PDVInputStream) = 
-            log.debug("\n\n+++DimseRQHandler.onDimseRQ : {}, {}, {}, {}, {}", as, pc, dimse, cmd, data)
+            logger.debug("\n\n+++DimseRQHandler.onDimseRQ : {}, {}, {}, {}, {}", as, pc, dimse, cmd, data)
         override def onClose(as: Association) = 
-            log.debug("\n\n+++DimseRQHandler.onClose : {}", as)
+            logger.debug("\n\n+++DimseRQHandler.onClose : {}", as)
     ae.setDimseRQHandler(dimseRQHandler)
 
     // query 호출때마다 새로운 request 생성 - 원래의 rq 변수 대치
@@ -126,7 +126,7 @@ case class CFind(val callingAe: String, val calledAe: String, val remoteHost: St
                     ae.connect(conn, remote, request)
             }{ case as:Association => 
                 IO.blocking :
-                    log.debug("+++ Freeing association : {}", as)
+                    logger.debug("+++ Freeing association : {}", as)
                     as.waitForOutstandingRSP()
                     as.release() 
                     // 여러번 호출하려면 shutdown 하면 안 됨, 언제 shutdown??
@@ -149,7 +149,7 @@ case class CFind(val callingAe: String, val calledAe: String, val remoteHost: St
         setInformationModel(cuid, level)
         val request = makeRequest(cuid)
         addKeys(dtags)
-        log.info("\n\n***CFIND keys before open : {}", keys)
+        logger.info("\n\n***CFIND keys before open : {}", keys)
         val result = ArrayBuffer.empty[A]
         var numMatches: Int = 0
         for 
@@ -165,7 +165,7 @@ case class CFind(val callingAe: String, val calledAe: String, val remoteHost: St
                                 numMatches += 1
                                 if numMatches >= m then 
                                     cancel(as)
-                                    log.debug(s"\n\n***CANCEL CALLED in CFind {} matches", numMatches)
+                                    logger.debug(s"\n\n***CANCEL CALLED in CFind {} matches", numMatches)
                             )
                     as.cfind(cuid, priority, keys, null, dimseRespHandler)
         yield result.toSeq

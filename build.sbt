@@ -17,5 +17,7 @@ lazy val d4cs = (project in file("."))
             "org.slf4j" % "slf4j-simple" % "2.0.7",
             "org.tpolecat" %% "doobie-core" % "1.0.0-RC4",
             "org.xerial" % "sqlite-jdbc" % "3.42.0.0",
-        )
+            "eu.timepit" %% "fs2-cron-calev" % "0.8.3",
+        ),
+        Compile / run / fork := true
     )

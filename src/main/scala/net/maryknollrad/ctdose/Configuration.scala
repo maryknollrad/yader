@@ -8,12 +8,14 @@ import cats.data.*
 import cats.data.Validated.*
 import cats.effect.IO
 import cats.syntax.all.*
+import java.time.LocalDate
 import CTDoseInfo.*
 
 object Configuration:
     case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
     type TesseractPath = String
-    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Option[String], encoding: String)
+    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Option[String], encoding: String,
+        processBegin: Option[LocalDate], processDayBehind: Int, pauseInterval: Int, calendarEvent: Option[String])
 
     def ctInfo() = 
         val ctConf = Try(ConfigFactory.load("ct-info").getConfig("CTINFO"))
@@ -87,7 +89,12 @@ object Configuration:
                 val institutionNames = c.getStringList("institution").asScala.toList.map(_.trim().toUpperCase())
                 val storepng = if c.hasPath("store-png") then Some(c.getString("store-png")) else None
                 val encoding = c.getString("encoding")
-                CTDoseConfig(ci, tpath, isDLP, institutionNames, storepng, encoding)
+                val processBegin = if c.hasPath("process-begin") then Some(LocalDate.parse(c.getString("process-begin"))) else None
+                val processDayBehind = if c.hasPath("process-day-behind") then c.getInt("process-day-behind") else 1
+                val pauseInterval = if c.hasPath("pause-interval") then c.getInt("pause-interval") else 0
+                val calev = if c.hasPath("calendar-event") then Some(c.getString("calendar-event")) else None
+                assert(processDayBehind >= 0 && pauseInterval >= 0)
+                CTDoseConfig(ci, tpath, isDLP, institutionNames, storepng, encoding, processBegin, processDayBehind, pauseInterval, calev)
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")
 

@@ -37,8 +37,10 @@ object Demo extends IOApp:
         // ct_info()
         // SQLite.createTablesIfNotExists()
         // tagTest()
-        Configuration.loadConfigAndRun({
-            case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now(), Some(CTDose.getDefaultCollectTags()))})
+        // Configuration.loadConfigAndRun({
+        //     // case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now().minusDays(1L), Some(CTDose.getDefaultCollectTags()))})
+        //     case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
+        CTDoseInfo.run()
         *> IO(ExitCode.Success)
 
     def tagTest() = 

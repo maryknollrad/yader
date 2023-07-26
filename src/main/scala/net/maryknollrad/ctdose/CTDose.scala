@@ -155,7 +155,7 @@ object CTDose:
                 val startTime = System.nanoTime()
                 for
                     // CTs Tags : Seq[Seq[StringTag]]
-                    ctTagss             <-  findCTStudies(cfind, d, Some(2))
+                    ctTagss             <-  findCTStudies(cfind, d)
                     /* POSSIBLY IMPORTANT
                        map(...).sequence is easier to read than traverse because metal informs current type
                        but possibly map evaluated simultaneosly, causing strange results esp. dealing with external library

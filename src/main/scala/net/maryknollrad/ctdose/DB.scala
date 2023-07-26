@@ -7,5 +7,5 @@ object DB:
         description: String, protocol: String, bodypart: String, manufacturer: String, model: String, 
         station: String, operator: String, dose: Double)
 
-    case class Patient(id: String, sex: Char, birthday: LocalDate)
+    case class Patient(id: String, sex: String, birthday: LocalDate)
     
