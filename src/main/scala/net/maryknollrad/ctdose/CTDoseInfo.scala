@@ -104,11 +104,13 @@ object CTDoseInfo:
                                     case _ => conf.processBegin.getOrElse(LocalDate.now().minusDays(conf.processDayBehind))
                                 val endDate = LocalDate.now().minusDays(conf.processDayBehind)
                                 val dstream = beginDate.datesUntil(endDate.plusDays(1)).iterator().asScala.toSeq
-                                dstream.traverse(d => 
+                                SQLite.log(s"Processing $beginDate ~ $endDate").transact(SQLite.xa)
+                                *> dstream.traverse(d => 
                                     logger.info("Processing date : {}", d)
-                                    getDoseReportAndStore(conf, ctInfo, d, ctags) *>
-                                    IO.sleep(conf.pauseInterval.seconds)
-                                ) *> SQLite.updateLastDateProcessed(endDate)
+                                    getDoseReportAndStore(conf, ctInfo, d, ctags) 
+                                    *> IO.sleep(conf.pauseInterval.seconds)
+                                ) 
+                                *> SQLite.updateLastDateProcessed(endDate)
                                 }
         yield ()
 
@@ -122,7 +124,7 @@ object CTDoseInfo:
                         val runtime = CalEvent.unsafe(schedule)
                         val scheduled = calevScheduler.awakeEvery(runtime) >> Stream.eval(jobio)
                         logger.info("RUNNING IN SERVER MODE.")
-                        scheduled.compile.drain
+                        jobio >> scheduled.compile.drain
                     case None => 
                         logger.info("RUNNING PLAIN MODE")
                         jobio

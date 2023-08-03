@@ -15,7 +15,7 @@ object Configuration:
     case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
     type TesseractPath = String
     case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Option[String], encoding: String,
-        processBegin: Option[LocalDate], processDayBehind: Int, pauseInterval: Int, calendarEvent: Option[String])
+        processBegin: Option[LocalDate], processDayBehind: Int, pauseInterval: Int, calendarEvent: Option[String], webPort: Option[Int])
 
     def ctInfo() = 
         val ctConf = Try(ConfigFactory.load("ct-info").getConfig("CTINFO"))
@@ -84,17 +84,21 @@ object Configuration:
                     c.getInt("port"),
                     c.getString("encoding")
                 )
+                def getOptionalString(path: String) = if c.hasPath(path) then Some(c.getString(path)) else None
+                def getOptionalInt(path: String) = if c.hasPath(path) then Some(c.getInt(path)) else None
                 val tpath = c.getString("tesseract-path")
                 val isDLP = c.getBoolean("doseDLP")
                 val institutionNames = c.getStringList("institution").asScala.toList.map(_.trim().toUpperCase())
-                val storepng = if c.hasPath("store-png") then Some(c.getString("store-png")) else None
+                val storepng = getOptionalString("store-png")
                 val encoding = c.getString("encoding")
-                val processBegin = if c.hasPath("process-begin") then Some(LocalDate.parse(c.getString("process-begin"))) else None
-                val processDayBehind = if c.hasPath("process-day-behind") then c.getInt("process-day-behind") else 1
-                val pauseInterval = if c.hasPath("pause-interval") then c.getInt("pause-interval") else 0
-                val calev = if c.hasPath("calendar-event") then Some(c.getString("calendar-event")) else None
+                val processBegin = getOptionalString("process-begin").map(LocalDate.parse)
+                val processDayBehind = getOptionalInt("process-day-behind").getOrElse(1)
+                val pauseInterval = getOptionalInt("pause-interval").getOrElse(0)
+                val calev = getOptionalString("calendar-event")
+                val webport = getOptionalInt("web-port-number")
                 assert(processDayBehind >= 0 && pauseInterval >= 0)
-                CTDoseConfig(ci, tpath, isDLP, institutionNames, storepng, encoding, processBegin, processDayBehind, pauseInterval, calev)
+                CTDoseConfig(ci, tpath, isDLP, institutionNames, storepng, encoding, 
+                    processBegin, processDayBehind, pauseInterval, calev, webport)
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")
 

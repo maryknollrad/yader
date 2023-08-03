@@ -15,7 +15,8 @@ import java.awt.image.BufferedImage
 import CTDose.DoseResultRaw
 import CTDoseInfo.*
 import org.dcm4che3.data.ElementDictionary
-// import org.slf4j.Logger
+import net.maryknollrad.httpserver.HttpServer
+import cats.syntax.all.*
 
 case class CT(chartNo: String, patientName: String, patientSex: String, patientAge: Int, 
                 studyDateTime: LocalDateTime, description: String, studyID: String)
@@ -40,7 +41,9 @@ object Demo extends IOApp:
         // Configuration.loadConfigAndRun({
         //     // case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now().minusDays(1L), Some(CTDose.getDefaultCollectTags()))})
         //     case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
-        CTDoseInfo.run()
+        // (CTDoseInfo.run(), HttpServer.server).parMapN { (_, _) => () }
+        HttpServer.server 
+        // CTDoseInfo.run()
         *> IO(ExitCode.Success)
 
     def tagTest() = 
