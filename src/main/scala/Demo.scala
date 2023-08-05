@@ -1,5 +1,5 @@
 import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
-import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo}
+import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo, CTDRL}
 import net.maryknollrad.ctdose.SQLite
 
 import DicomBase.*
@@ -42,8 +42,9 @@ object Demo extends IOApp:
         //     // case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now().minusDays(1L), Some(CTDose.getDefaultCollectTags()))})
         //     case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
         // (CTDoseInfo.run(), HttpServer.server).parMapN { (_, _) => () }
-        HttpServer.server 
-        // CTDoseInfo.run()
+        // HttpServer.server 
+        CTDoseInfo.run()
+        // IO.println(CTDRL())
         *> IO(ExitCode.Success)
 
     def tagTest() = 

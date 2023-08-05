@@ -49,7 +49,7 @@ lazy val yader = (project in file("."))
             "org.dcm4che" % "dcm4che-imageio" % dcm4cheVersion,
 
             "org.ekrich" %% "sconfig" % "1.5.0",
-            "net.sourceforge.tess4j" % "tess4j" % "5.7.0",
+            "net.sourceforge.tess4j" % "tess4j" % "5.8.0",
             "org.slf4j" % "slf4j-simple" % "2.0.7",
             "org.tpolecat" %% "doobie-core" % "1.0.0-RC4",
             "org.xerial" % "sqlite-jdbc" % "3.42.0.0",
