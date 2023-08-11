@@ -42,6 +42,8 @@ import java.awt.Image
 import DicomBase.*
 import RetrieveLevel.*
 
+// USING C-GET RATHER THAN C-MOVE 
+// http://dclunie.blogspot.com/2016/05/to-c-move-is-human-to-c-get-divine.html
 case class CGet(val callingAe: String, val calledAe: String, val remoteHost: String, val remotePort: Int, val storeFile: Boolean = true) extends DicomBase:
     val deviceName: String = "GETSCU"
 
@@ -62,10 +64,12 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
 
     // memory storage, key => SOPInstanceUID
     private val imageStorage = scala.collection.mutable.Map.empty[String, ByteArrayOutputStream]
+    private val logger = LoggerFactory.getLogger(getClass)
 
     private val storageSCP = new BasicCStoreSCP("*"):
         override def store(as: Association, pc: PresentationContext, rq: Attributes,
             data: PDVInputStream, rsp: Attributes) = 
+                logger.debug("StorageSCP.store")
                 val iuid = rq.getString(Tag.AffectedSOPInstanceUID)
                 val cuid = rq.getString(Tag.AffectedSOPClassUID)
                 val tsuid = pc.getTransferSyntax()
@@ -198,7 +202,7 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
 
     def getDicomInputStreamAndFree(sopInstanceUid: String) = 
         val k = sopInstanceUid.trim
-        val r = imageStorage.get(k).map(ba => DicomInputStream(java.io.ByteArrayInputStream(ba.toByteArray()))).toRight(s"Cannot find SOPInstanceUID in memory $sopInstanceUid")
+        val r = imageStorage.get(k).map(ba => DicomInputStream(java.io.ByteArrayInputStream(ba.toByteArray()))).toRight(s"Cannot find SOPInstanceUID in memory $sopInstanceUid, currently holing ${imageStorage.size} items")
         imageStorage -= k
         r
 

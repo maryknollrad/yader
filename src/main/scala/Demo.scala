@@ -39,9 +39,10 @@ object Demo extends IOApp:
         // SQLite.createTablesIfNotExists()
         // tagTest()
         // Configuration.loadConfigAndRun({
-        //     // case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now().minusDays(1L), Some(CTDose.getDefaultCollectTags()))})
-        //     case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
-        // (CTDoseInfo.run(), HttpServer.server).parMapN { (_, _) => () }
+            // case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now().minusDays(1L), CTDose.getDefaultCollectTags())})
+            // case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
+            // case (cdi, cti) => dose(cdi, cti)})
+        // (CTDoseInfo.run(), HttpServer.serrver).parMapN { (_, _) => () }
         // HttpServer.server 
         CTDoseInfo.run()
         // IO.println(CTDRL())
