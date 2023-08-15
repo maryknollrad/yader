@@ -134,6 +134,7 @@ object CTDose:
         )
 
     // should match study table fields, first 4 tags must be patient ID, sex, birthday, accession number
+    // CONSIDER : request physicial, study order code, contrast material
     private val defaultCollectTags = Seq(Tag.PatientID, Tag.PatientSex, Tag.PatientBirthDate, Tag.AccessionNumber, 
         Tag.StudyDate, Tag.StudyTime, Tag.StudyDescription, Tag.ProtocolName, Tag.BodyPartExamined, 
         Tag.InstitutionName, Tag.Manufacturer, Tag.ManufacturerModelName, Tag.StationName, Tag.OperatorsName)

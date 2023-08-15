@@ -1,5 +1,5 @@
 import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
-import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo, CTDRL}
+import net.maryknollrad.ctdose.{Configuration, Tesseract, CTDose, CTDoseInfo, CTDRL, DB}
 import net.maryknollrad.ctdose.SQLite
 
 import DicomBase.*
@@ -43,10 +43,19 @@ object Demo extends IOApp:
             // case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
             // case (cdi, cti) => dose(cdi, cti)})
         // (CTDoseInfo.run(), HttpServer.serrver).parMapN { (_, _) => () }
-        // HttpServer.server 
-        CTDoseInfo.run()
+        HttpServer.server 
+        // CTDoseInfo.run()
         // IO.println(CTDRL())
+        // dbTest()
         *> IO(ExitCode.Success)
+
+    def dbTest() = 
+        import DB.QueryPartition.* 
+        import DB.QueryInterval.*
+        import doobie.*, doobie.implicits.*
+
+        SQLite.partitionedQuery(Bodypart, Week, 3).to[List].transact(SQLite.xa)
+            .flatMap(rs => IO.println(rs))
 
     def tagTest() = 
         // IO.println(CTDose.getDefaultCollectTags().map(t =>

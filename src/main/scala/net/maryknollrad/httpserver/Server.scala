@@ -29,10 +29,36 @@ object HttpServer:
     |	<script src="index.js"></script>
     |  </body>
     |</html>""".stripMargin
+    
+    private val textHtmlType = MediaType.unsafeParse("text/html")
+
+    import net.maryknollrad.ctdose.DB.{QueryInterval, QueryPartition}
+
+    private def optionInterval(argument: String): Option[QueryInterval] =
+        import QueryInterval.*
+        val qMap = Map("day" -> Day, "week" -> Week, "month" -> Month)
+        qMap.get(argument.toLowerCase())
+    
+    private def optionPartition(argument: String): Option[QueryPartition] =
+        import QueryPartition.* 
+        val qMap = Map("bodypart" -> Bodypart)
+        qMap.get(argument.toLowerCase())
+
+    import net.maryknollrad.ctdose.SQLite
+    import doobie.*, doobie.implicits.* 
+    import cats.syntax.all.* 
+    import upickle.default.{ReadWriter => RW, macroRW, write}
 
     val helloWorldService = HttpRoutes.of[IO] {
         case GET -> Root =>
-            Ok(index, `Content-Type`(MediaType.unsafeParse("text/html")))
+            Ok(index, `Content-Type`(textHtmlType))
+        case GET -> Root / "dose" / interval / partition =>
+            optionInterval(interval).flatMap(i => 
+                optionPartition(partition).map(p => 
+                    SQLite.partitionedQuery(p, i)
+                        .to[List].transact(SQLite.xa)
+                        .flatMap(rs => Ok(write(rs)))
+                )).getOrElse(BadRequest())
         case request@GET -> Root / "index.js" =>
             // StaticFile.fromath(Path("/Users/nineclue/lab/yader-f/target/scala-3.3.0/yaderf-fastopt/main.js"), Some(request)).getOrElseF(NotFound())
             StaticFile.fromPath(Path("/Users/nineclue/lab/yader-f/target/scala-3.3.0/scalajs-bundler/main/yaderf-fastopt-bundle.js"), Some(request)).getOrElseF(NotFound())

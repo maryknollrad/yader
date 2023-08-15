@@ -88,3 +88,27 @@ object SQLite:
         val studyInsert = sql"""INSERT INTO study VALUES ($study)""".update.run
         val patientInsert = sql"""INSERT INTO patient VALUES ($patient) ON CONFLICT DO NOTHING""".update.run
         patientInsert.combine(studyInsert).transact(xa)
+
+    def partitionedQuery(partition: QueryPartition, interval: QueryInterval, minus: Int = 1, plus: Int = 0) = 
+        import DB.QueryPartition.* 
+        import DB.QueryInterval.* 
+
+        val pfrag = partition match
+            case Bodypart =>
+                fr0"body_part_examined"
+        val itv = interval match
+            case Day =>
+                Fragment.const0("'%j'")
+            case Week =>
+                Fragment.const0("'%W'")
+            case Month =>
+                Fragment.const0("'%m'")
+
+        val qSql = fr"""SELECT $pfrag, cast(strftime($itv, study_date) as integer) as stime, 
+            |dose_value, 0.0, rank() OVER (PARTITION BY $pfrag, $itv ORDER BY dose_value) FROM study,
+            |(SELECT cast(strftime($itv, datetime('now', 'localtime')) as integer) AS tnum) 
+            |WHERE stime >= (tnum - $minus) AND stime <= (tnum + $plus)
+            |ORDER BY $pfrag, stime""".stripMargin
+
+        qSql.query[Partitioned]
+        // qSql.query[(String, Int, Double, Double, Int)]

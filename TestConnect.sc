@@ -21,8 +21,10 @@ val device = Device("READROOM")
 val conn = Connection()
 
 val remote1 = Connection()
-remote1.setHostname("192.168.10.133")
-remote1.setPort(105)
+// remote1.setHostname("192.168.10.133")
+// remote1.setPort(105)
+remote1.setHostname("192.168.10.121")
+remote1.setPort(4242)
 
 val remote2 = Connection()
 remote2.setHostname("192.168.10.130")
@@ -94,6 +96,7 @@ as1.waitForOutstandingRSP()
 as1.release()
 as1.waitForSocketClose()
 
+/*
 // C-FIND of ModalityWorkList
 println("MODALITY WORKLIST")
 println("-"*40)
@@ -142,7 +145,7 @@ finally
     as2.release()
     as2.waitForSocketClose()
     // jobs.toList.sequence.unsafeRunSync()
-
+*/
 println("TODAY'S CT EXAMS")
 println("-"*40)
 
@@ -252,8 +255,9 @@ finally
 
 val req4 = AAssociateRQ()
 req4.setCalledAET("NETGEAR_EXTERNAL")
-req4.addPresentationContext(PresentationContext(1, UID.Verification, UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian))
-req4.addPresentationContext(PresentationContext(3, UID.StudyRootQueryRetrieveInformationModelGet, UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian))
+// req4.addPresentationContext(PresentationContext(1, UID.Verification, UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian))
+// req4.addPresentationContext(PresentationContext(3, UID.StudyRootQueryRetrieveInformationModelGet, UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian))
+req4.addPresentationContext(PresentationContext(1, UID.StudyRootQueryRetrieveInformationModelGet, UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian))
 
 /* from store-tcs.properties
 CTImageStorage:\
@@ -326,27 +330,35 @@ val storageSCP2 = new BasicCStoreSCP("*"):
     var count = 0
     override def store(as: Association, pc: PresentationContext, rq: Attributes,
         data: PDVInputStream, rsp: Attributes) = 
+            println("*** M-WRITE BEGIN?")
             val iuid = rq.getString(Tag.AffectedSOPInstanceUID)
             val cuid = rq.getString(Tag.AffectedSOPClassUID)
             val tsuid = pc.getTransferSyntax()
             val metainfo = as.createFileMetaInformation(iuid, cuid, tsuid)
+            println(metainfo)
             val byteStream = ByteArrayOutputStream()
             val dostream = DicomOutputStream(byteStream, tsuid)
             try
+                println("begin of try")
                 dostream.writeFileMetaInformation(metainfo)
+                println("middle of try")
                 data.copyTo(dostream)
+                println("end of try")
             finally
-                dostream.close()
+                try 
+                    dostream.close()
+                catch
+                    case _ => ()
             buffs += byteStream
             count += 1
             println(s"*** STORED $count - ${buffs.length}")
 
 val serviceRegistry5 = DicomServiceRegistry()
-serviceRegistry5.addDicomService(storageSCP2)
+serviceRegistry5.addDicomService(storageSCP)
 device.setDimseRQHandler(serviceRegistry5)
 
+println("MAKIN C-GET OPERATION")
 io.StdIn.readLine()
-println("MAKING CONNECTION")
 val as5 = ae.connect(conn, remote1, req4)
 val dimseRespHandler5 = new DimseRSPHandler(as5.nextMessageID()):
     override def onDimseRSP(as: Association, cmd: Attributes, data: Attributes) =
@@ -360,11 +372,14 @@ try
     println("GET-COMMAND")
     as5.cget(UID.StudyRootQueryRetrieveInformationModelGet, Priority.NORMAL, attrs4, null, dimseRespHandler5)
 finally
-    as5.waitForOutstandingRSP()
-    as5.release()
-    as5.waitForSocketClose()
+    // try
+        as5.waitForOutstandingRSP()
+        as5.release()
+        as5.waitForSocketClose()
+    // catch 
+    //     case _ => ()
 
-println("Now, converting...")
+println(s"Now, converting... ${buffs.length}")
 buffs.zipWithIndex.foreach((bs, i) => 
     val dis = DicomInputStream(ByteArrayInputStream(bs.toByteArray()))
     // val attr = dis.readDataset()

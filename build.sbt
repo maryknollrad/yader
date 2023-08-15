@@ -58,6 +58,7 @@ lazy val yader = (project in file("."))
             "org.http4s" %% "http4s-dsl" % http4sVersion,
             "org.http4s" %% "http4s-ember-server" % http4sVersion,
             "org.http4s" %% "http4s-ember-client" % http4sVersion,
+            "com.lihaoyi" %% "upickle" % "3.1.2",
         ),
         // Compile / run / fork := true,
         assembly / mainClass := Some("Demo"),
