@@ -154,7 +154,7 @@ req3.setCalledAET("NETGEAR_EXTERNAL")
 req3.addPresentationContext(PresentationContext(1, UID.StudyRootQueryRetrieveInformationModelFind, UID.ImplicitVRLittleEndian, UID.ExplicitVRLittleEndian, UID.ExplicitVRBigEndian))
 
 val attrs3 = Attributes()
-Seq((Tag.StudyDate, "20230811"), (Tag.ModalitiesInStudy, "CT")).foreach((tag, value) => 
+Seq((Tag.StudyDate, "20230814"), (Tag.ModalitiesInStudy, "CT")).foreach((tag, value) => 
     val vr = ElementDictionary.vrOf(tag, null)
     attrs3.setString(tag, vr, value)
 )
@@ -354,7 +354,8 @@ val storageSCP2 = new BasicCStoreSCP("*"):
             println(s"*** STORED $count - ${buffs.length}")
 
 val serviceRegistry5 = DicomServiceRegistry()
-serviceRegistry5.addDicomService(storageSCP)
+serviceRegistry5.addDicomService(new BasicCEchoSCP())
+serviceRegistry5.addDicomService(storageSCP2)
 device.setDimseRQHandler(serviceRegistry5)
 
 println("MAKIN C-GET OPERATION")

@@ -112,3 +112,10 @@ object SQLite:
 
         qSql.query[Partitioned]
         // qSql.query[(String, Int, Double, Double, Int)]
+        
+/* QUERIES
+select body_part_examined, dose_value from study order by body_part_examined, dose_value;
+select body_part_examined, avg(dose_value) from study group by body_part_examined;
+select cast(strftime('%m', date('now')) as integer) / 4, strftime('%m', date('now'), strftime('%W', date('now'));
+select body_part_examined as bpart, dose_value, strftime('%W', study_date) as sweek, row_number() over (partition by body_part_examined, strftime('%W', study_date) order by dose_value) from study;
+*/

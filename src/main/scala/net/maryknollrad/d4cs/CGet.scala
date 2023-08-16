@@ -1,20 +1,13 @@
 package net.maryknollrad.d4cs
 
 import org.dcm4che3.data.*
-import org.dcm4che3.io.DicomInputStream
-import org.dcm4che3.io.DicomOutputStream
+import org.dcm4che3.io.{DicomInputStream, DicomOutputStream}
 import org.dcm4che3.net.*
-import org.dcm4che3.net.pdu.AAssociateRQ
-import org.dcm4che3.net.pdu.ExtendedNegotiation
-import org.dcm4che3.net.pdu.PresentationContext
-import org.dcm4che3.net.pdu.RoleSelection
-import org.dcm4che3.net.service.BasicCStoreSCP
-import org.dcm4che3.net.service.DicomServiceException
-import org.dcm4che3.net.service.DicomServiceRegistry
-import org.dcm4che3.util.SafeClose
+import org.dcm4che3.net.pdu.{AAssociateRQ, ExtendedNegotiation, PresentationContext, RoleSelection}
+import org.dcm4che3.net.service.{BasicCEchoSCP, BasicCStoreSCP, DicomServiceException, DicomServiceRegistry}
+// import org.dcm4che3.util.SafeClose
 import org.dcm4che3.util.StringUtils
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.File
 import java.io.IOException
@@ -93,6 +86,7 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
     device.addApplicationEntity(ae)
     ae.addConnection(conn)
     val serviceRegistry = DicomServiceRegistry()
+    serviceRegistry.addDicomService(new BasicCEchoSCP())
     serviceRegistry.addDicomService(storageSCP)
     device.setDimseRQHandler(serviceRegistry)   // DimeseRQHandler is here!
 

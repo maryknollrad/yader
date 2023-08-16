@@ -49,7 +49,7 @@ object HttpServer:
     import cats.syntax.all.* 
     import upickle.default.{ReadWriter => RW, macroRW, write}
 
-    val helloWorldService = HttpRoutes.of[IO] {
+    val yaderService = HttpRoutes.of[IO] {
         case GET -> Root =>
             Ok(index, `Content-Type`(textHtmlType))
         case GET -> Root / "dose" / interval / partition =>
@@ -68,6 +68,6 @@ object HttpServer:
         .default[IO]
         .withHost(ipv4"0.0.0.0")
         .withPort(port"7878")
-        .withHttpApp(helloWorldService.orNotFound)
+        .withHttpApp(yaderService.orNotFound)
         .build
         .use(_ => IO.never)
