@@ -42,7 +42,7 @@ object Demo extends IOApp:
             // case (cdi, cti) => CTDoseInfo.getDoseReportAndStore(cdi, cti, LocalDate.now().minusDays(1L), CTDose.getDefaultCollectTags())})
             // case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
             // case (cdi, cti) => dose(cdi, cti)})
-        // (CTDoseInfo.run(), HttpServer.serrver).parMapN { (_, _) => () }
+        // (CTDoseInfo.run(), HttpServer.server).parMapN { (_, _) => () }
         HttpServer.server 
         // CTDoseInfo.run()
         // IO.println(CTDRL())
@@ -54,7 +54,7 @@ object Demo extends IOApp:
         import DB.QueryInterval.*
         import doobie.*, doobie.implicits.*
 
-        SQLite.partitionedQuery(Bodypart, Week, 3).to[List].transact(SQLite.xa)
+        SQLite.partitionedQuery(Bodypart, Week, None, 3).to[List].transact(SQLite.xa)
             .flatMap(rs => IO.println(rs))
 
     def tagTest() = 

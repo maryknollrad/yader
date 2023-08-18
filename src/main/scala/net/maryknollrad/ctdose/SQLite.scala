@@ -36,18 +36,12 @@ object SQLite:
                 case _ => "TEXT"
             s"$fname $ftype"
         )
-        // val createSQL = """
-        // | CREATE TABLE IF NOT EXISTS study
-        // | (acno TEXT NOT NULL, patient_id TEXT NOT NULL REFERENCES patient (id),
-        // """.stripMargin ++ midFields.mkString(", ") ++ """,
-        // | dose_value REAL NOT NULL DEFAULT 0.0)
-        // """.stripMargin
         val createSQL = """
         | CREATE TABLE IF NOT EXISTS study
-        | (acno TEXT NOT NULL, patient_id TEXT NOT NULL REFERENCES patient (id),
-        | study_date DATE NOT NULL, study_time TIME NOT NULL, study_description TEXT NOT NULL, protocol_name TEXT NOT NULL, 
-        | body_part_examined TEXT NOT NULL, manufacturer TEXT NOT NULL, manufacturer_model_name TEXT NOT NULL, 
-        | station_name TEXT NOT NULL, operators_name TEXT NOT NULL, dose_value REAL NOT NULL DEFAULT 0.0)
+        | (acno TEXT NOT NULL, patientid TEXT NOT NULL REFERENCES patient (id),
+        | studydate DATE NOT NULL, studytime TIME NOT NULL, studydescription TEXT NOT NULL, protocol TEXT, 
+        | bodypart TEXT NOT NULL, manufacturer TEXT NOT NULL, modelname TEXT NOT NULL, 
+        | station TEXT NOT NULL, operator TEXT NOT NULL, dosevalue1 REAL NOT NULL DEFAULT 0.0, dosevalue2 REAL NOT NULL DEFAULT 0.0)
         """.stripMargin
         Fragment.const(createSQL)
 
@@ -89,13 +83,11 @@ object SQLite:
         val patientInsert = sql"""INSERT INTO patient VALUES ($patient) ON CONFLICT DO NOTHING""".update.run
         patientInsert.combine(studyInsert).transact(xa)
 
-    def partitionedQuery(partition: QueryPartition, interval: QueryInterval, minus: Int = 1, plus: Int = 0) = 
+    def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
         import DB.QueryPartition.* 
         import DB.QueryInterval.* 
 
-        val pfrag = partition match
-            case Bodypart =>
-                fr0"body_part_examined"
+        val pfrag = Fragment.const0(partition.strValue)
         val itv = interval match
             case Day =>
                 Fragment.const0("'%j'")
@@ -103,15 +95,13 @@ object SQLite:
                 Fragment.const0("'%W'")
             case Month =>
                 Fragment.const0("'%m'")
-
-        val qSql = fr"""SELECT $pfrag, cast(strftime($itv, study_date) as integer) as stime, 
-            |dose_value, 0.0, rank() OVER (PARTITION BY $pfrag, $itv ORDER BY dose_value) FROM study,
+        val qSql = fr"""SELECT $pfrag, cast(strftime($itv, studydate) as integer) as stime, acno, patientid, 
+            |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, cast(strftime($itv, studydate) as integer) ORDER BY dosevalue1) FROM study,
             |(SELECT cast(strftime($itv, datetime('now', 'localtime')) as integer) AS tnum) 
-            |WHERE stime >= (tnum - $minus) AND stime <= (tnum + $plus)
-            |ORDER BY $pfrag, stime""".stripMargin
+            |WHERE stime >= (tnum - $from) AND stime < (tnum - $to)""".stripMargin
+        val subFragged = subpartition.map(p => qSql ++ fr"AND $pfrag = $p").getOrElse(qSql)
 
-        qSql.query[Partitioned]
-        // qSql.query[(String, Int, Double, Double, Int)]
+        subFragged.query[Partitioned]
         
 /* QUERIES
 select body_part_examined, dose_value from study order by body_part_examined, dose_value;

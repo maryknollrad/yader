@@ -57,7 +57,7 @@ object CTDoseInfo:
                             LocalTime.parse(imap(Tag.StudyTime), timeformatter),
                             imap(Tag.StudyDescription), imap(Tag.ProtocolName), imap(Tag.BodyPartExamined), 
                             imap(Tag.Manufacturer), imap(Tag.ManufacturerModelName), imap(Tag.StationName), 
-                            imap(Tag.OperatorsName), dose) 
+                            imap(Tag.OperatorsName), dose, 0.0) 
                         }.toEither.left.map(t => s"Error occurred during preparing insertion of study : ${t.getMessage()}")
             patient <- Try(
                         DB.Patient(imap(Tag.PatientID), imap(Tag.PatientSex).trim, 
