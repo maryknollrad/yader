@@ -56,4 +56,7 @@ object BoxData:
                     (los, ds :+ a, hos)
         }
 
-        (Seq(af.doubleValue(sorted(0)), qs(0), qs(1), qs(2), af.doubleValue(sorted(len-1))), lowOutliers, highOutliers, rest)
+        // https://medium.com/@agarwal.vishal819/outlier-detection-with-boxplots-1b6757fafa21
+        val vmin = if af.doubleValue(sorted(0)) < lowerbound then lowerbound else af.doubleValue(sorted(0))
+        val vmax = if af.doubleValue(sorted(maxIndex)) > upperbound then upperbound else af.doubleValue(sorted(maxIndex))
+        (Seq(vmin, qs(0), qs(1), qs(2), vmax), lowOutliers, highOutliers, rest)
