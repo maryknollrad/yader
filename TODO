@@ -1,8 +1,10 @@
 1. Add field DoseValueExtra to studies
 2. Rename table names to pleural
 3. Find contrast related fields / study code / requesting physician
+4. ~~Add sleep between IO jobs (unnecessary sleep in one time job)~~
+5. ~~Update date log after processing each day~~
 
-* 제한
+* Limits
 1. 전체 image를 받아 오지 않는다
    - contrast related fields, CDIvol 등 field
 2. 실시간으로 image를 받는 movescp 제공 ?

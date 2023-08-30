@@ -37,7 +37,7 @@ object BoxData:
             if (dindex - dindex.floor) == 0 then 
                 val iindex = dindex.floor.toInt min maxIndex
                 val nindex = (iindex + 1) min maxIndex
-                af.doubleValue(sorted(iindex)) + af.doubleValue(sorted(nindex)) / 2.0
+                (af.doubleValue(sorted(iindex)) + af.doubleValue(sorted(nindex))) / 2.0
             else
                 af.doubleValue(sorted(dindex.ceil.toInt min maxIndex))
         )

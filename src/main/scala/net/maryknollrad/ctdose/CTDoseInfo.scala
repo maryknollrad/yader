@@ -93,6 +93,13 @@ object CTDoseInfo:
             _                   <-  SQLite.log(logMsg(d, successes, fails, stored, startTime)).transact(SQLite.xa)
         yield ()
 
+    extension[A] (as: Seq[A])
+        def intervene(i: A): Seq[A] = 
+            def h(aas: Seq[A], acc: Seq[A]): Seq[A] = 
+                if aas.length <= 1 then acc ++ aas
+                else h(aas.tail, acc ++ Seq(aas.head, i))
+            h(as, Seq.empty)
+
     def processDoseReport(conf: Configuration.CTDoseConfig, ctInfo: CTInfo, collectTags: Option[Seq[Int]] = None) = 
         val ctags = collectTags.getOrElse(CTDose.getDefaultCollectTags())
         for 
@@ -105,12 +112,17 @@ object CTDoseInfo:
                                 val endDate = LocalDate.now().minusDays(conf.processDayBehind)
                                 val dstream = beginDate.datesUntil(endDate.plusDays(1)).iterator().asScala.toSeq
                                 SQLite.log(s"Processing $beginDate ~ $endDate").transact(SQLite.xa)
-                                *> dstream.traverse(d => 
+                                *> 
+                                dstream.map(d =>
                                     logger.info("Processing date : {}", d)
                                     getDoseReportAndStore(conf, ctInfo, d, ctags) 
-                                    *> IO.sleep(conf.pauseInterval.seconds)
-                                ) 
-                                *> SQLite.updateLastDateProcessed(endDate)
+                                    *> SQLite.updateLastDateProcessed(d)
+                                ).intervene(IO.sleep(conf.pauseInterval.seconds)).sequence
+                                // dstream.traverse(d => 
+                                //     logger.info("Processing date : {}", d)
+                                //     getDoseReportAndStore(conf, ctInfo, d, ctags) 
+                                //     *> IO.sleep(conf.pauseInterval.seconds)
+                                // ) 
                                 }
         yield ()
 
