@@ -1,12 +1,22 @@
-scalaVersion := "3.3.0"
-organization := "net.maryknollrad"
+val sharedSettings = Seq(
+    scalaVersion := "3.3.0",
+    organization := "net.maryknollrad"
+)
 
-val catsEffectVersion = "3.5.1"
 val dcm4cheVersion = "5.31.0"
+val catsEffectVersion = "3.5.1"
 val http4sVersion = "0.23.23"
 
-lazy val yader = (project in file("."))
-    .settings(
+lazy val yader = crossProject(JSPlatform, JVMPlatform)
+    .withoutSuffixFor(JVMPlatform)
+    .crossType(CrossType.Full)
+    .settings(sharedSettings)
+    .jsSettings(
+      libraryDependencies ++= Seq(
+        "org.scalablytyped" %%% "apexcharts" % "3.42.0-3a98ba",
+      )
+    )
+    .jvmSettings(
         resolvers += "SciJava" at "https://maven.scijava.org/content/repositories/public/",
         libraryDependencies ++= Seq(
             "org.typelevel" %% "cats-effect" % catsEffectVersion,
