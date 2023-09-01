@@ -43,8 +43,8 @@ object Demo extends IOApp:
             // case (cdi, cti) => CTDoseInfo.processDoseReport(cdi, cti)})
             // case (cdi, cti) => dose(cdi, cti)})
         // (CTDoseInfo.run(), HttpServer.server).parMapN { (_, _) => () }
-        // HttpServer.server 
-        CTDoseInfo.run()
+        HttpServer.server 
+        // CTDoseInfo.run()
         // IO.println(CTDRL())
         // dbTest()
         *> IO(ExitCode.Success)

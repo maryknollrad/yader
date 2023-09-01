@@ -77,24 +77,42 @@ object SQLite:
             .query[String]
             .map(s => logDateTimeFormatter.parse(s).pipe(LocalDate.from))
             .option.transact(xa)
-        
+
+    def getCountAndDoseSum() =
+        sql"SELECT count(*), sum(dosevalue1), sdate FROM study, (SELECT min(studydate) as sdate FROM study)".query[(Int, Double, String)].unique.transact(xa)
+
+    def getLastLogs(ltype: Int = 0, count: Int = 10) = 
+        sql"SELECT content FROM log WHERE logtype = $ltype ORDER BY at DESC LIMIT $count".query[String].to[List].transact(xa)
+
     def insertStudyAndPatient(study: Study, patient: Patient) = 
         val studyInsert = sql"""INSERT INTO study VALUES ($study)""".update.run
         val patientInsert = sql"""INSERT INTO patient VALUES ($patient) ON CONFLICT DO NOTHING""".update.run
         patientInsert.combine(studyInsert).transact(xa)
 
-    def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
-        import DB.QueryPartition.* 
+    private def intervalConst(qi: QueryInterval) = 
         import DB.QueryInterval.* 
-
-        val pfrag = Fragment.const0(partition.strValue)
-        val itv = interval match
+        qi match
             case Day =>
                 Fragment.const0("'%j'")
             case Week =>
                 Fragment.const0("'%W'")
             case Month =>
                 Fragment.const0("'%m'")
+            case Year =>
+                Fragment.const0("'%Y'")
+
+    def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
+        val itv = intervalConst(interval)
+        fr"""SELECT bodypart, cast(strftime($itv, studydate) as integer) as stime, count(*) as bcount 
+        |FROM study, (SELECT cast(strftime($itv, datetime('now', 'localtime')) as integer) as tnum) 
+        |WHERE stime BETWEEN (tnum - $from) AND (tnum - $to) AND bodypart NOT LIKE '*%' 
+        |GROUP BY bodypart ORDER BY bcount DESC""".stripMargin
+            .query[(String, Int, Long)].to[List].transact(xa)
+
+    def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
+        val pfrag = Fragment.const0(partition.strValue)
+        val itv = intervalConst(interval)
+
         val qSql = fr"""SELECT $pfrag, cast(strftime($itv, studydate) as integer) as stime, acno, patientid, 
             |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, cast(strftime($itv, studydate) as integer) ORDER BY dosevalue1) FROM study,
             |(SELECT cast(strftime($itv, datetime('now', 'localtime')) as integer) AS tnum) 

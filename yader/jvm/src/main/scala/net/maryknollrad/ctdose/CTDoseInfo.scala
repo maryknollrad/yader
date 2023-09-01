@@ -111,7 +111,7 @@ object CTDoseInfo:
                                     case _ => conf.processBegin.getOrElse(LocalDate.now().minusDays(conf.processDayBehind))
                                 val endDate = LocalDate.now().minusDays(conf.processDayBehind)
                                 val dstream = beginDate.datesUntil(endDate.plusDays(1)).iterator().asScala.toSeq
-                                SQLite.log(s"Processing $beginDate ~ $endDate").transact(SQLite.xa)
+                                SQLite.log(s"Processing $beginDate ~ $endDate", 2).transact(SQLite.xa)
                                 *> 
                                 dstream.map(d =>
                                     logger.info("Processing date : {}", d)

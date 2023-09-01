@@ -13,7 +13,8 @@ object DB:
         case Day extends QueryInterval("day")
         case Week extends QueryInterval("week")
         case Month extends QueryInterval("month")
-    
+        case Year extends QueryInterval("year")
+        
     enum QueryPartition(val strValue: String):
         case Bodypart extends QueryPartition("bodypart")
         case Operator extends QueryPartition("operator")
