@@ -20,8 +20,5 @@ object DB:
         case Operator extends QueryPartition("operator")
         // case Physician extends QueryPartition("physician")
 
-    case class Partitioned(part: String, dateNumber: Int, accessionNumber: String, patientId: String, dose1: Double, dose2: Double, rank: Int)
-
-    object Partitioned:
-        import upickle.default.{ReadWriter => RW, macroRW}
-        implicit val rw: RW[Partitioned] = macroRW
+    case class Partitioned(part: String, dateNumber: Int, accessionNumber: String, patientId: String, 
+        dose1: Double, dose2: Double, rank: Int) derives upickle.default.ReadWriter

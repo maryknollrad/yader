@@ -22,42 +22,37 @@ object Api:
             i <- optionInterval(interval)
         yield f(p, i)
 
-    private def bpartsCounts(qi: QueryInterval) = 
-        // if selected interval is day, show yesterday else this interval
-        val (from, to) = if qi == QueryInterval.Day then (-1, 0) else (0, 0)
+    private def bpartsCounts(qi: QueryInterval, from: Int, to: Int) = 
         SQLite.getBodypartCounts(qi, from, to).map(ts =>
             val (cats, counts) = ts.foldLeft((Seq.empty[String], Seq.empty[Long]))({ 
                 case ((cats, counts), t) => (cats :+ t._1, counts :+ t._3)
             })
-            // println(s"$cats, $counts")
             (cats, counts)
         )
 
-    private def doseBox(qi: QueryInterval) = 
-        SQLite.partitionedQuery(QueryPartition.Bodypart, qi).to[List].transact(SQLite.xa)
+    private def doseBox(qi: QueryInterval, from: Int, to: Int) = 
+        SQLite.partitionedQuery(QueryPartition.Bodypart, qi, from = from, to = to)
             .map(rs => Data.toBoxedMap(rs))
 
     val apiService = HttpRoutes.of[IO] {
         case GET -> Root / "echo" / words =>
             Ok(words)
 
-        case GET -> Root / "graphdata" =>
-            val qi = Contents.selectedInterval()
-            for 
-                (cats, counts)  <-  bpartsCounts(qi)
-                map             <-  doseBox(qi)
-            yield Ok("result")
-
-        case GET -> Root / "bpartsdonut"  =>
-            case class Result(categories: Seq[String], counts: Seq[Long]) derives RW
-            val qi = Contents.selectedInterval()
-            bpartsCounts(qi).flatMap((cats, counts) => Ok(write(Result(cats, counts))))
+        case GET -> Root / "graphdata" / IntVar(i) if i >= 0 && i <= 3 =>
+            case class GraphData(bodyparts: Seq[String], bodypartsCounts: Seq[Long], 
+                bodypartBox: Map[String, Map[String, Seq[Double]]]) derives RW
+            val qi = QueryInterval.fromOrdinal(i)
+            // if selected interval is day, show yesterday else this interval
+            val (from, to) = if qi == QueryInterval.Day then (1, 0) else (0, 0)
+            bpartsCounts(qi, from, to).flatMap(bparts =>
+                doseBox(qi, from, to).flatMap(boxmap => 
+                    Ok(write(GraphData(bparts._1, bparts._2, boxmap)))
+                ))
 
         // json data for ApexChart boxplot
         case GET -> Root / "boxdata" / partition / interval =>
             pAndI(partition, interval)((p, i) => 
                 SQLite.partitionedQuery(p, i)
-                    .to[List].transact(SQLite.xa)
                     .flatMap(rs => 
                         val retouched = Data.toBoxedMap(rs)
                         Ok(write(retouched)))).getOrElse(BadRequest())
@@ -66,7 +61,6 @@ object Api:
         case GET -> Root / "boxdetail" / partition / partitionValue / interval =>
             pAndI(partition, interval)((p, i) =>
                 SQLite.partitionedQuery(p, i, Some(partitionValue))
-                    .to[List].transact(SQLite.xa)
                     .flatMap(rs =>
                         val retouched = Data.toBoxedMapWithDetails(rs)
                         Ok(write(retouched)))).getOrElse(BadRequest())

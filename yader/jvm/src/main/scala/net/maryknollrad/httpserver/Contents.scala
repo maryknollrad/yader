@@ -47,20 +47,15 @@ object Contents:
                     )).toString
         )
 
-    private var intervalIndex = 0
     private def intervalButtons(selected: Int = 0) = 
-        val calljs = if (intervalIndex == selected) then Seq.empty else Seq(script("JS.intervalChanged()"))
-        intervalIndex = selected
-        // println(s"setting intervalIndex to $selected")
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
-            div(id := "intLabl", cls := "text-2xl font-bold", "Query Interval"),
+            div(id := "intLabl", cls := "text-2xl font-bold amber-300", "Query Interval"),
             div(id := "intBtns", cls := "btn-group",
                 Seq("Day", "Week", "Month", "Year").
                 zipWithIndex.map((int, i) => 
                     val c = "btn" ++ (if i == selected then " btn-active" else "")
-                    button(cls := c, data.hx.get := s"/c/intervals/$i", data.hx.target := "#intervals", data.hx.swap := "outerHTML", int))
-            ),
-            calljs
+                    button(id := s"ibtn$i", cls := c, onclick := s"JS.btnClick($i)", int))
+            )
         )
 
     private def graphs() = 
@@ -72,7 +67,6 @@ object Contents:
         ).toString
 
     import net.maryknollrad.ctdose.DB.QueryInterval
-    def selectedInterval() = QueryInterval.fromOrdinal(intervalIndex)
 
     val contentService = HttpRoutes.of[IO] {
         case GET -> Root / "date" =>
@@ -87,7 +81,4 @@ object Contents:
 
         case GET -> Root / "graphs" =>
             Ok(graphs())
-
-        case GET -> Root / "intervals" / IntVar(i) =>
-            Ok(intervalButtons(i).toString)
     }

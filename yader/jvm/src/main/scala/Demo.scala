@@ -54,7 +54,7 @@ object Demo extends IOApp:
         import DB.QueryInterval.*
         import doobie.*, doobie.implicits.*
 
-        SQLite.partitionedQuery(Bodypart, Week, None, 3).to[List].transact(SQLite.xa)
+        SQLite.partitionedQuery(Bodypart, Week, None, 3)
             .flatMap(rs => IO.println(rs))
 
     def tagTest() = 
