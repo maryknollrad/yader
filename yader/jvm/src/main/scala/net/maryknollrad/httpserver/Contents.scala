@@ -31,11 +31,13 @@ object Contents:
                         div("Maryknoll Hospital"))),
                 div(replace("/c/notifications"), "Notifications"),
                 div(replace("/c/graphs"), "Graphs"),
+                div(id := "modalMark")
+                // modal()
             )
         )
     )
 
-    def notifications(): IO[String] = 
+    private def notifications(): IO[String] = 
         SQLite.getLastLogs().map(ls =>
             if ls.isEmpty then ""
             else
@@ -49,7 +51,7 @@ object Contents:
 
     private def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
-            div(id := "intLabl", cls := "text-2xl font-bold amber-300", "Query Interval"),
+            div(id := "intLabl", cls := "text-2xl font-bold amber-300", onclick := "JS.dialog('modal')", "Query Interval"),
             div(id := "intBtns", cls := "btn-group",
                 Seq("Day", "Week", "Month", "Year").
                 zipWithIndex.map((int, i) => 
@@ -66,6 +68,29 @@ object Contents:
             script("JS.setupGraphs('grdose', 'grbparts')")
         ).toString
 
+    private def modalContent1() = 
+        div(id := "modalContent",
+            h3(cls := "font-bold text-lg", "Hello!"),
+            p(cls := "py-4", "Press ESC key or click the button below to close"))
+
+    private def modalContent2() = 
+        Seq[Frag](
+            h3(cls := "font-bold text-lg", "Hello!"),
+            p(cls := "py-4", "Press ESC key or click the button below to close"))
+
+    private def modal(f: Seq[Frag] = Seq.empty) = 
+        val dialog = tag("dialog")
+        div(id := "dialogDiv",
+            dialog(id := "modalDialog", cls := "modal", 
+                form(method := "dialog", cls := "modal-box",
+                    f,
+                    div(cls := "modal-action", 
+                        button(cls := "btn", "Close"))
+                )
+            ),
+            script("JS.showDialog()")
+        )
+
     import net.maryknollrad.ctdose.DB.QueryInterval
 
     val contentService = HttpRoutes.of[IO] {
@@ -81,4 +106,7 @@ object Contents:
 
         case GET -> Root / "graphs" =>
             Ok(graphs())
+
+        case GET -> Root / "modal" / suburl =>
+            Ok(modal(modalContent2()).toString)
     }

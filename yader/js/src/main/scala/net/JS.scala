@@ -12,6 +12,7 @@ import typings.apexcharts.*
 import typings.apexcharts.global.ApexCharts
 import typings.apexcharts.ApexCharts.ApexOptions
 import typings.apexcharts.anon.*
+import org.scalajs.dom.HTMLElement
 
 @JSExportTopLevel("JS")
 object JS:
@@ -107,3 +108,22 @@ object JS:
             htmx.removeClass(htmx.find(s"#ibtn$selectedIndex"), "btn-active")
             selectedIndex = index
             updateCharts()
+
+    /*
+    @JSExport
+    def dialog(url: String) = 
+        val dialog = htmx.find("#modalDialog")
+        dialog.asInstanceOf[HTMLElement].setAttribute("hx-get", url)
+        println(s"set hx-get to $url")
+        htmx.process("#modalDialog")
+        dialog.showModal()
+    */
+
+    @JSExport
+    def dialog(suburl: String) = 
+        htmx.ajax("GET", s"/c/modal/$suburl", "#modalMark")
+        
+    @JSExport
+    def showDialog() = 
+        val dialog = htmx.find("#modalDialog")
+        dialog.showModal()

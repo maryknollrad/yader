@@ -36,6 +36,7 @@ object Api:
 
     val apiService = HttpRoutes.of[IO] {
         case GET -> Root / "echo" / words =>
+            println(words)
             Ok(words)
 
         case GET -> Root / "graphdata" / IntVar(i) if i >= 0 && i <= 3 =>
