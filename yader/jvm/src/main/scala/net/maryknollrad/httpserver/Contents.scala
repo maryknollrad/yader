@@ -7,6 +7,7 @@ import scalatags.Text.all.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import net.maryknollrad.ctdose.SQLite
+import net.maryknollrad.ctdose.DB.Partitioned
 
 object Contents:
     private def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
@@ -49,14 +50,14 @@ object Contents:
                     )).toString
         )
 
+    private val intervals = Seq("Day", "Week", "Month", "Year")
     private def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
             div(id := "intLabl", cls := "text-2xl font-bold amber-300", onclick := "JS.dialog('modal')", "Query Interval"),
             div(id := "intBtns", cls := "btn-group",
-                Seq("Day", "Week", "Month", "Year").
-                zipWithIndex.map((int, i) => 
+                intervals.zipWithIndex.map((interval, i) => 
                     val c = "btn" ++ (if i == selected then " btn-active" else "")
-                    button(id := s"ibtn$i", cls := c, onclick := s"JS.btnClick($i)", int))
+                    button(id := s"ibtn$i", cls := c, onclick := s"JS.btnClick($i)", interval))
             )
         )
 
@@ -67,16 +68,6 @@ object Contents:
             div(id := "grbparts", cls := "w-1/2"),
             script("JS.setupGraphs('grdose', 'grbparts')")
         ).toString
-
-    private def modalContent1() = 
-        div(id := "modalContent",
-            h3(cls := "font-bold text-lg", "Hello!"),
-            p(cls := "py-4", "Press ESC key or click the button below to close"))
-
-    private def modalContent2() = 
-        Seq[Frag](
-            h3(cls := "font-bold text-lg", "Hello!"),
-            p(cls := "py-4", "Press ESC key or click the button below to close"))
 
     private def modal(f: Seq[Frag] = Seq.empty) = 
         val dialog = tag("dialog")
@@ -89,6 +80,32 @@ object Contents:
                 )
             ),
             script("JS.showDialog()")
+        )
+
+    private def p5AndOutliers(subpartition: String, p5: Seq[Double], outliers: Seq[Partitioned]) = 
+        Seq[Frag](
+            div(cls := "text-3xl font-semibold", s"Detailed stats $subpartition"),
+            div(cls := "text-xl text-amber-200", "Basic Stats"),
+            table(cls := "table",
+                thead(th("Min"), th("Q1"), th("Median"), th("Q3"), th("Max")),
+                tbody(tr(p5.map(d => td(String.format("%.1f", d)))))),
+            div(cls := "text-xl text-amber-200", "Outliers"),
+            div(cls := "overflow-y-auto",
+                table(cls := "table",
+                    thead(th(), th("Date"), th("Accession Number"), th("Patient ID"), th("dose")),
+                    tbody(outliers.zipWithIndex.map((p, i) =>
+                            tr( th((i+1).toString),
+                                td(p.studydate),
+                                td(p.accessionNumber),
+                                td(p.patientId),
+                                td(String.format("%.1f", p.dose1))
+                            ))))))
+
+    private def trendBoxes[A](subpartition: String, map: Map[A, Map[String, Seq[Double]]]) = 
+        Seq[Frag](
+            div(cls := "text-3xl font-semibold", s"Trends $subpartition"),
+            div(id := "trendgraph"),
+            // script("JS.trendGraph()")
         )
 
     import net.maryknollrad.ctdose.DB.QueryInterval
@@ -107,6 +124,29 @@ object Contents:
         case GET -> Root / "graphs" =>
             Ok(graphs())
 
-        case GET -> Root / "modal" / suburl =>
-            Ok(modal(modalContent2()).toString)
+        case GET -> Root / "modal" / partition / partitionValue / IntVar(i) 
+                        if i >= 0 && i <= QueryInterval.qiSize =>
+            Api.pAndI(partition, intervals(i).toLowerCase())((pt, it) =>
+                val (from, to) = QueryInterval.defaultRange(it)
+                SQLite.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
+                    val (p5, outliers) = Data.toBoxData(ps)
+                    Ok(modal(p5AndOutliers(partitionValue, p5, outliers)).toString)
+                )
+            ).getOrElse(NotFound())
+
+        case GET -> Root / "modal" / "trends" / partition / partitionValue / IntVar(i) 
+                        if i >= 0 && i <= QueryInterval.qiSize =>
+            Api.pAndI(partition, intervals(i).toLowerCase())((pt, it) =>
+                val (from, to) = it match
+                    case QueryInterval.Day => (7, 0)
+                    case QueryInterval.Week => (10, 0)
+                    case QueryInterval.Month => (12, 0)
+                    case QueryInterval.Year => (5, 0)
+                SQLite.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
+                    println("\n" ++ "*" * 20 ++ "\n")
+                    val boxes = Data.toBoxedMap(ps, _.dateNumber)
+                    println(boxes)
+                    Ok(modal(trendBoxes(partitionValue, boxes)).toString)
+                )
+            ).getOrElse(NotFound())
     }

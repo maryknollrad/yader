@@ -10,13 +10,13 @@ import cats.syntax.all.*
 import upickle.default.{ReadWriter => RW, macroRW, write}
 
 object Api:
-    private def optionInterval(argument: String): Option[QueryInterval] =
+    def optionInterval(argument: String): Option[QueryInterval] =
         QueryInterval.values.find(_.strValue == argument)    
     
-    private def optionPartition(argument: String): Option[QueryPartition] =
+    def optionPartition(argument: String): Option[QueryPartition] =
         QueryPartition.values.find(_.strValue == argument)
 
-    private def pAndI[A](partition: String, interval: String)(f:(QueryPartition, QueryInterval) => A): Option[A] = 
+    def pAndI[A](partition: String, interval: String)(f:(QueryPartition, QueryInterval) => A): Option[A] = 
         for 
             p <- optionPartition(partition)
             i <- optionInterval(interval)
@@ -39,32 +39,35 @@ object Api:
             println(words)
             Ok(words)
 
-        case GET -> Root / "graphdata" / IntVar(i) if i >= 0 && i <= 3 =>
+        case GET -> Root / "graphdata" / IntVar(i) if i >= 0 && i <= QueryInterval.qiSize =>
             case class GraphData(bodyparts: Seq[String], bodypartsCounts: Seq[Long], 
                 bodypartBox: Map[String, Map[String, Seq[Double]]]) derives RW
             val qi = QueryInterval.fromOrdinal(i)
             // if selected interval is day, show yesterday else this interval
-            val (from, to) = if qi == QueryInterval.Day then (1, 0) else (0, 0)
+            val (from, to) = QueryInterval.defaultRange(qi)
             bpartsCounts(qi, from, to).flatMap(bparts =>
                 doseBox(qi, from, to).flatMap(boxmap => 
                     Ok(write(GraphData(bparts._1, bparts._2, boxmap)))
                 ))
 
         // json data for ApexChart boxplot
+        /*
         case GET -> Root / "boxdata" / partition / interval =>
             pAndI(partition, interval)((p, i) => 
                 SQLite.partitionedQuery(p, i)
                     .flatMap(rs => 
                         val retouched = Data.toBoxedMap(rs)
                         Ok(write(retouched)))).getOrElse(BadRequest())
+        */
 
-        // json data when user selects category from above boxplot
+        // json data when user clicks boxplot
+        /*
         case GET -> Root / "boxdetail" / partition / partitionValue / interval =>
             pAndI(partition, interval)((p, i) =>
                 SQLite.partitionedQuery(p, i, Some(partitionValue))
                     .flatMap(rs =>
                         val retouched = Data.toBoxedMapWithDetails(rs)
                         Ok(write(retouched)))).getOrElse(BadRequest())
-
+        */
         // case GET -> Root/ "patientdose" / chartId => ???
     }

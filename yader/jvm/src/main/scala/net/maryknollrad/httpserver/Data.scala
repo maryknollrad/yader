@@ -3,16 +3,17 @@ package net.maryknollrad.httpserver
 import net.maryknollrad.ctdose.DB.Partitioned
 
 object Data:
-    def toBoxedMap(rs: List[Partitioned]) = 
-        rs.groupBy(_.part).map((k, ps) =>
+    def toBoxedMap[A](rs: List[Partitioned], kf: Partitioned => A = _.part, 
+                        mapDose1: Boolean = true, highValuesOnly: Boolean = true) = 
+        rs.groupBy(kf).map((k, ps) =>
             val values = ps.map(_.dose1)
             val (p5, lows, highs, _) = BoxData(values, false)
-            k -> Map("box" -> p5, "outliers" -> (lows ++ highs))
+            k -> Map("box" -> p5, "outliers" -> (if highValuesOnly then highs else lows ++ highs))
         )
 
-    def toBoxedMapWithDetails(rs: List[Partitioned]) = 
+    def toBoxData(rs: List[Partitioned], highValuesOnly: Boolean = true) = 
         val (p5, lows, highs, _) = BoxData(rs, false)
-        (p5, lows ++ highs)
+        (p5, (if highValuesOnly then highs else lows ++ highs))
 
 trait HasDouble[A]:
     def doubleValue(a: A): Double
@@ -43,7 +44,7 @@ object BoxData:
         )
 
         val outbound = (qs(2) - qs(0)) * 1.5
-        val lowerbound = qs(0) - outbound
+        val lowerbound = (qs(0) - outbound) max 0.0
         val upperbound = qs(2) + outbound
 
         val (lowOutliers, rest, highOutliers) = sorted.foldLeft((Seq.empty[A], Seq.empty[A], Seq.empty[A])) {

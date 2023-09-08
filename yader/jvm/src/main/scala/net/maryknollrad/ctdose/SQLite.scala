@@ -113,13 +113,13 @@ object SQLite:
         val pfrag = Fragment.const0(partition.strValue)
         val itv = intervalConst(interval)
 
-        val qSql = fr"""SELECT $pfrag, cast(strftime($itv, studydate) as integer) as stime, acno, patientid, 
+        val subFragged = subpartition.map(p => fr"AND $pfrag = $p").getOrElse(Fragment.empty)
+        val qSql = fr"""SELECT $pfrag, studydate, cast(strftime($itv, studydate) as integer) as stime, acno, patientid, 
             |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, cast(strftime($itv, studydate) as integer) ORDER BY dosevalue1) FROM study,
             |(SELECT cast(strftime($itv, datetime('now', 'localtime')) as integer) AS tnum) 
-            |WHERE stime BETWEEN (tnum - $from) AND (tnum - $to)""".stripMargin
-        val subFragged = subpartition.map(p => qSql ++ fr"AND $pfrag = $p").getOrElse(qSql)
+            |WHERE stime BETWEEN (tnum - $from) AND (tnum - $to) $subFragged""".stripMargin
 
-        subFragged.query[Partitioned].to[List].transact(SQLite.xa)
+        qSql.query[Partitioned].to[List].transact(SQLite.xa)
         
 /* QUERIES
 select body_part_examined, dose_value from study order by body_part_examined, dose_value;
