@@ -1516,11 +1516,6 @@ html {
   padding: 1.25rem;
 }
 
-.py-4 {
-  padding-top: 1rem;
-  padding-bottom: 1rem;
-}
-
 .pt-6 {
   padding-top: 1.5rem;
 }
@@ -1569,11 +1564,6 @@ html {
 .text-amber-200 {
   --tw-text-opacity: 1;
   color: rgb(253 230 138 / var(--tw-text-opacity));
-}
-
-.text-amber-300 {
-  --tw-text-opacity: 1;
-  color: rgb(252 211 77 / var(--tw-text-opacity));
 }
 
 .text-emerald-400 {

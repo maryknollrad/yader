@@ -50,24 +50,14 @@ object Api:
                     Ok(write(GraphData(bparts._1, bparts._2, boxmap)))
                 ))
 
-        // json data for ApexChart boxplot
-        /*
-        case GET -> Root / "boxdata" / partition / interval =>
-            pAndI(partition, interval)((p, i) => 
-                SQLite.partitionedQuery(p, i)
-                    .flatMap(rs => 
-                        val retouched = Data.toBoxedMap(rs)
-                        Ok(write(retouched)))).getOrElse(BadRequest())
-        */
-
-        // json data when user clicks boxplot
-        /*
-        case GET -> Root / "boxdetail" / partition / partitionValue / interval =>
-            pAndI(partition, interval)((p, i) =>
-                SQLite.partitionedQuery(p, i, Some(partitionValue))
-                    .flatMap(rs =>
-                        val retouched = Data.toBoxedMapWithDetails(rs)
-                        Ok(write(retouched)))).getOrElse(BadRequest())
-        */
-        // case GET -> Root/ "patientdose" / chartId => ???
+        case GET -> Root / "trends" / partition / partitionValue / interval =>
+            pAndI(partition, interval)((pt, it) =>
+                val (from, to) = it match
+                    case QueryInterval.Day => (7, 0)
+                    case QueryInterval.Week => (10, 0)
+                    case QueryInterval.Month => (12, 0)
+                    case QueryInterval.Year => (5, 0)
+                SQLite.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
+                    Ok(write(Data.toBoxedMap(ps, _.dateNumber)))
+                )).getOrElse(NotFound())
     }

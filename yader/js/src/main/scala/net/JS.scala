@@ -111,7 +111,7 @@ object JS:
     private var selectedIndex = 0
 
     @JSExport
-    def btnClick(index: Int) = 
+    def intBtnClick(index: Int) = 
         if index != selectedIndex then
             htmx.addClass(htmx.find(s"#ibtn$index"), "btn-active")
             htmx.removeClass(htmx.find(s"#ibtn$selectedIndex"), "btn-active")
@@ -128,3 +128,15 @@ object JS:
     def showDialog() = 
         val dialog = htmx.find("#modalDialog")
         dialog.showModal()
+
+    @JSExport
+    def trendGraph(partition: String, partitionValue: String, intervalValue: String) = 
+        println(s"/api/trends/$partition/$partitionValue/$intervalValue")
+        setAjaxHandler(trendGraphCB)
+        xhttp.open("GET", s"/api/trends/$partition/$partitionValue/$intervalValue", true)
+        xhttp.send()
+
+    private def trendGraphCB(e: Event) = 
+        val r = JSON.parse(xhttp.responseText)
+        val ks = Object.keys(r.asInstanceOf[Object])
+        ks.foreach(println)

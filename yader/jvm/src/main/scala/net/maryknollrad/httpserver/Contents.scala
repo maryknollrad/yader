@@ -57,7 +57,7 @@ object Contents:
             div(id := "intBtns", cls := "btn-group",
                 intervals.zipWithIndex.map((interval, i) => 
                     val c = "btn" ++ (if i == selected then " btn-active" else "")
-                    button(id := s"ibtn$i", cls := c, onclick := s"JS.btnClick($i)", interval))
+                    button(id := s"ibtn$i", cls := c, onclick := s"JS.intBtnClick($i)", interval))
             )
         )
 
@@ -84,7 +84,7 @@ object Contents:
 
     private def p5AndOutliers(subpartition: String, p5: Seq[Double], outliers: Seq[Partitioned]) = 
         Seq[Frag](
-            div(cls := "text-3xl font-semibold", s"Detailed stats $subpartition"),
+            div(cls := "text-3xl font-semibold", s"Detailed stats - $subpartition"),
             div(cls := "text-xl text-amber-200", "Basic Stats"),
             table(cls := "table",
                 thead(th("Min"), th("Q1"), th("Median"), th("Q3"), th("Max")),
@@ -101,11 +101,11 @@ object Contents:
                                 td(String.format("%.1f", p.dose1))
                             ))))))
 
-    private def trendBoxes[A](subpartition: String, map: Map[A, Map[String, Seq[Double]]]) = 
+    private def trendBoxes[A](partition: String, partitionValue: String, interval: String) = 
         Seq[Frag](
-            div(cls := "text-3xl font-semibold", s"Trends $subpartition"),
+            div(cls := "text-3xl font-semibold", s"Trends - $partitionValue"),
             div(id := "trendgraph"),
-            // script("JS.trendGraph()")
+            script(s"JS.trendGraph('$partition', '$partitionValue', '$interval')")
         )
 
     import net.maryknollrad.ctdose.DB.QueryInterval
@@ -136,6 +136,8 @@ object Contents:
 
         case GET -> Root / "modal" / "trends" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
+            Ok(modal(trendBoxes(partition, partitionValue, intervals(i).toLowerCase())).toString)
+            /*
             Api.pAndI(partition, intervals(i).toLowerCase())((pt, it) =>
                 val (from, to) = it match
                     case QueryInterval.Day => (7, 0)
@@ -146,7 +148,8 @@ object Contents:
                     println("\n" ++ "*" * 20 ++ "\n")
                     val boxes = Data.toBoxedMap(ps, _.dateNumber)
                     println(boxes)
-                    Ok(modal(trendBoxes(partitionValue, boxes)).toString)
+                    Ok(modal(trendBoxes(partition, partitionValue, intervals(i).toLowerCase())).toString)
                 )
             ).getOrElse(NotFound())
+            */
     }
