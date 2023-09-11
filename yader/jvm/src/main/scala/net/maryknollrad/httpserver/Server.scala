@@ -9,6 +9,8 @@ import org.http4s.server.Router
 import org.http4s.implicits.*
 import org.http4s.headers.{Origin, `Content-Type`}
 import fs2.io.file.Path
+import net.maryknollrad.ctdose.Configuration.CTDoseConfig
+import net.maryknollrad.ctdose.CTDose
 
 object HttpServer:
     import org.http4s.server.middleware.*
@@ -27,22 +29,22 @@ object HttpServer:
             StaticFile.fromResource(file, Some(request)).getOrElseF(NotFound())
     }
 
-    val yaderService = Router("/" -> staticService, "/api" -> Api.apiService, "/c" -> Contents.contentService)
-    /*
-    val service = CORS.policy.withAllowOriginHost(Set(
-            Origin.Host(Uri.Scheme.http, Uri.RegName("localhost"), Some(5000)),
-        ))(yaderService)
-    */
-    val corsService = CORS.policy.withAllowOriginAll(yaderService)
-
-    private val portNum = 7878
-    val server = EmberServerBuilder
-        .default[IO]
-        .withHost(ipv4"0.0.0.0")
-        .withPort(Port.fromInt(portNum).get)
-        .withHttpApp(corsService.orNotFound)
-        .build
-        .use(_ => 
-            IO.print(s"Running server at port: $portNum\n")
-            *> IO.never
-        )
+    def server(cdi: CTDoseConfig) = 
+        val portNum = cdi.webPort.getOrElse(7878)
+        val yaderService = Router("/" -> staticService, "/api" -> Api.apiService, "/c" -> Contents.contentService(cdi.institution.head))
+        /*
+        val service = CORS.policy.withAllowOriginHost(Set(
+                Origin.Host(Uri.Scheme.http, Uri.RegName("localhost"), Some(5000)),
+            ))(yaderService)
+        */
+        val corsService = CORS.policy.withAllowOriginAll(yaderService)
+        EmberServerBuilder
+            .default[IO]
+            .withHost(ipv4"0.0.0.0")
+            .withPort(Port.fromInt(portNum).get)
+            .withHttpApp(corsService.orNotFound)
+            .build
+            .use(_ => 
+                IO.print(s"Running server at port: $portNum\n")
+                *> IO.never
+            )

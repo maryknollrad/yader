@@ -118,26 +118,19 @@ object CTDoseInfo:
                                     getDoseReportAndStore(conf, ctInfo, d, ctags) 
                                     *> SQLite.updateLastDateProcessed(d)
                                 ).intervene(IO.sleep(conf.pauseInterval.seconds)).sequence
-                                // dstream.traverse(d => 
-                                //     logger.info("Processing date : {}", d)
-                                //     getDoseReportAndStore(conf, ctInfo, d, ctags) 
-                                //     *> IO.sleep(conf.pauseInterval.seconds)
-                                // ) 
                                 }
         yield ()
 
-    def run() = 
+    import Configuration.CTDoseConfig
+    def run(cdi: CTDoseConfig, cti: CTInfo) = 
         val calevScheduler = CalevScheduler.systemDefault[IO]
-        Configuration.loadConfigAndRun((cdi, cti) => 
-                val jobio = CTDoseInfo.processDoseReport(cdi, cti)
-                // val jobio = IO.println("i'm doing my job...")
-                cdi.calendarEvent match 
-                    case Some(schedule) =>
-                        val runtime = CalEvent.unsafe(schedule)
-                        val scheduled = calevScheduler.awakeEvery(runtime) >> Stream.eval(jobio)
-                        logger.info("RUNNING IN SERVER MODE.")
-                        jobio >> scheduled.compile.drain
-                    case None => 
-                        logger.info("RUNNING PLAIN MODE")
-                        jobio
-        )
+        val jobio = CTDoseInfo.processDoseReport(cdi, cti)
+        cdi.calendarEvent match 
+            case Some(schedule) =>
+                val runtime = CalEvent.unsafe(schedule)
+                val scheduled = calevScheduler.awakeEvery(runtime) >> Stream.eval(jobio)
+                logger.info("RUNNING IN SERVER MODE.")
+                jobio >> scheduled.compile.drain
+            case None => 
+                logger.info("RUNNING PLAIN MODE")
+                jobio

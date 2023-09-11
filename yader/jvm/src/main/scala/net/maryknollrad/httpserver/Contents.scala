@@ -23,21 +23,23 @@ object Contents:
             script(src := "yader.js"),
             link(href := "/assets/yader.css", rel := "stylesheet")
         ),
-        body( // data.theme := "cupcake",
+        body( 
             div(id := "page", cls := "flex flex-col p-5 space-y-2 min-h-screen",
-                // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
-                div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary bg-primary", 
-                    div(cls := "w-1/4 text-5xl align-middle", replace("/c/date"), "Date"),
-                    div(cls := "grow text-xl text-right", 
-                        div(replace("/c/statsummary"), "Statistics"),
-                        div("Maryknoll Hospital"))),
+                div(replace("/c/header"), "Header"),
                 div(replace("/c/notifications"), "Notifications"),
                 div(replace("/c/graphs"), "Graphs"),
                 div(id := "modalMark")
-                // modal()
             )
         )
     )
+
+    private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String) = 
+        // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
+        div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary bg-primary", 
+            div(cls := "w-1/4 text-5xl align-middle", dateString),
+            div(cls := "grow text-xl text-right", 
+                div(s"Total $count CT exams, ${dosesum.round} mGy.cm since ${sdate}"),
+                div(institutionName)))
 
     private def notifications(): IO[String] = 
         SQLite.getLastLogs().map(ls =>
@@ -68,8 +70,8 @@ object Contents:
         // div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-slate-900 p-5",
         div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-primary p-5",
             intervalButtons(),
-            div(id := "grdose", cls := "w-1/2"),
-            div(id := "grbparts", cls := "w-1/2"),
+            div(id := "grdose", cls := "w-4/5"),
+            div(id := "grbparts", cls := "w-2/5"),
             script("JS.setupGraphs('grdose', 'grbparts')")
         ).toString
 
@@ -116,13 +118,11 @@ object Contents:
 
     import net.maryknollrad.ctdose.DB.QueryInterval
 
-    val contentService = HttpRoutes.of[IO] {
-        case GET -> Root / "date" =>
-            Ok(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE))
-
-        case GET -> Root / "statsummary" =>
-            Ok(SQLite.getCountAndDoseSum().map((count, dosesum, sdate) => 
-                    s"Total $count CT exams, ${dosesum.round} mGy.cm since ${sdate}"))
+    def contentService(institutionName: String) = HttpRoutes.of[IO] {
+        case GET -> Root / "header" =>
+            val dateString = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+            SQLite.getCountAndDoseSum().flatMap((count, dosesum, sdate) =>
+                Ok(header(dateString, count, dosesum, sdate, institutionName).toString))
 
         case GET -> Root / "notifications" =>
             Ok(notifications())

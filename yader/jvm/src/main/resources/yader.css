@@ -1366,6 +1366,14 @@ html {
   width: 25%;
 }
 
+.w-4\/5 {
+  width: 80%;
+}
+
+.w-2\/5 {
+  width: 40%;
+}
+
 .grow {
   flex-grow: 1;
 }
