@@ -13,6 +13,7 @@ import typings.apexcharts.global.ApexCharts
 import typings.apexcharts.ApexCharts.ApexOptions
 import typings.apexcharts.anon.*
 import org.scalajs.dom.HTMLElement
+import org.scalajs.dom.HTMLDialogElement
 
 @JSExportTopLevel("JS")
 object JS:
@@ -53,7 +54,6 @@ object JS:
                 .setEvents(AEvent()
                     .setXAxisLabelClick((e, ct, cf) => 
                         val i = cf.asInstanceOf[Dynamic].labelIndex.asInstanceOf[Int]
-                        println(s"SELECTED CATEGORY IS ${categories(i)}")
                         dialog(s"trends/bodypart/${categories(i)}/$selectedIndex")
                     ).setMarkerClick((e, context, mobj) =>
                         val i = mobj.asInstanceOf[js.Dynamic].dataPointIndex.asInstanceOf[Int]
@@ -97,6 +97,7 @@ object JS:
             anon.Data(outData).setType("scatter").setName("outliers"))
 
         ApexCharts.exec(doseBoxChartId, "updateSeries", data)
+        ApexCharts.exec(doseBoxChartId, "_windowResize")
 
     @JSExport 
     def updateCharts() = 
@@ -129,14 +130,40 @@ object JS:
         val dialog = htmx.find("#modalDialog")
         dialog.showModal()
 
+    private val trendChartId = "trendBox"
     @JSExport
     def trendGraph(partition: String, partitionValue: String, intervalValue: String) = 
-        println(s"/api/trends/$partition/$partitionValue/$intervalValue")
-        setAjaxHandler(trendGraphCB)
+        val trendDiv = document.getElementById("trendgraph")
+        val trendOpt = ApexOptions()
+            .setSeries(js.Array(Data(js.Array())))
+            .setChart(ApexChart()
+                .setId(trendChartId).setType(apexchartsStrings.boxPlot)
+                .setToolbar(AutoSelected().setShow(false)))
+            .setNoData(ApexNoData().setText("No Data To Display").setStyle(FontFamilyFontSize().setFontSize("20")))
+            .setXaxis(ApexXAxis().setType(apexchartsStrings.category))
+            .setYaxis(ApexYAxis().setLabels(Align().setFormatter(truncate)))
+            .setTooltip(ApexTooltip().setTheme("dark").setY(ApexTooltipY().setFormatter(truncate)))
+        val doseChart = ApexCharts(trendDiv, trendOpt)
+        doseChart.render()
+
+        // destroy graph when modal window closes
+        val modalDialog = document.getElementById("modalDialog").asInstanceOf[HTMLDialogElement]
+        modalDialog.addEventListener("close", (e: Event) => { doseChart.destroy() })
+
+        setAjaxHandler(trendGraphCB(doseChart))
         xhttp.open("GET", s"/api/trends/$partition/$partitionValue/$intervalValue", true)
         xhttp.send()
 
-    private def trendGraphCB(e: Event) = 
+    private def trendGraphCB(chart: ApexCharts)(e: Event) = 
         val r = JSON.parse(xhttp.responseText)
-        val ks = Object.keys(r.asInstanceOf[Object])
-        ks.foreach(println)
+        val cats = Object.keys(r.asInstanceOf[Object])
+        val boxData: js.Array[ApexData] = cats.map(c => 
+            ApData(x = c, y = r.selectDynamic(c).selectDynamic("box")))
+        val outData: js.Array[ApexData] = cats.map(c => 
+            ApData(x = c, y = r.selectDynamic(c).selectDynamic("outliers")))
+        val data = js.Array(
+            anon.Data(boxData).setType("boxPlot").setName("box"),
+            anon.Data(outData).setType("scatter").setName("outliers"))
+
+        chart.updateSeries(data)
+        chart.asInstanceOf[js.Dynamic]._windowResize()

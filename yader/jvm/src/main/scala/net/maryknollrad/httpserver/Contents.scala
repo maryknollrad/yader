@@ -13,7 +13,7 @@ object Contents:
     private def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
 
     val index = "<!DOCTYPE html>" + html(
-        data.theme := "light",
+        data.theme := "luxury",
         head(
             title := "YADER",
             meta(charset := "UTF-8"),
@@ -23,9 +23,10 @@ object Contents:
             script(src := "yader.js"),
             link(href := "/assets/yader.css", rel := "stylesheet")
         ),
-        body(data.theme := "dracula",
+        body( // data.theme := "cupcake",
             div(id := "page", cls := "flex flex-col p-5 space-y-2 min-h-screen",
-                div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
+                // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
+                div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary bg-primary", 
                     div(cls := "w-1/4 text-5xl align-middle", replace("/c/date"), "Date"),
                     div(cls := "grow text-xl text-right", 
                         div(replace("/c/statsummary"), "Statistics"),
@@ -42,8 +43,10 @@ object Contents:
         SQLite.getLastLogs().map(ls =>
             if ls.isEmpty then ""
             else
-                div(id := "noti", cls := "relative p-5 rounded-md bg-slate-900 text-emerald-400",
-                    div(id := "notiLabel", cls := "absolute top-0 left-0 bg-amber-200 text-slate-950 text-xl rounded-sm p-1.5",
+                // div(id := "noti", cls := "relative p-5 rounded-md bg-slate-900 text-emerald-400",
+                div(id := "noti", cls := "relative p-5 rounded-md bg-secondary text-secondary-content",
+                    // div(id := "notiLabel", cls := "absolute top-0 left-0 bg-amber-200 text-slate-950 text-xl rounded-sm p-1.5",
+                    div(id := "notiLabel", cls := "absolute top-0 left-0 bg-accent text-accent-content border-accent text-xl rounded-sm p-1.5",
                         "Notifications"),
                     div(id := "notiContents", cls := "pt-6 h-[100px] overflow-y-auto text-lg",
                         ls.map(l => div(l))
@@ -53,7 +56,7 @@ object Contents:
     private val intervals = Seq("Day", "Week", "Month", "Year")
     private def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
-            div(id := "intLabl", cls := "text-2xl font-bold amber-300", onclick := "JS.dialog('modal')", "Query Interval"),
+            div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
             div(id := "intBtns", cls := "btn-group",
                 intervals.zipWithIndex.map((interval, i) => 
                     val c = "btn" ++ (if i == selected then " btn-active" else "")
@@ -62,7 +65,8 @@ object Contents:
         )
 
     private def graphs() = 
-        div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-slate-900 p-5",
+        // div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-slate-900 p-5",
+        div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-primary p-5",
             intervalButtons(),
             div(id := "grdose", cls := "w-1/2"),
             div(id := "grbparts", cls := "w-1/2"),
@@ -82,6 +86,7 @@ object Contents:
             script("JS.showDialog()")
         )
 
+    // shows basic stats and outliers within modal window, called when user clicks graph point 
     private def p5AndOutliers(subpartition: String, p5: Seq[Double], outliers: Seq[Partitioned]) = 
         Seq[Frag](
             div(cls := "text-3xl font-semibold", s"Detailed stats - $subpartition"),
@@ -101,6 +106,7 @@ object Contents:
                                 td(String.format("%.1f", p.dose1))
                             ))))))
 
+    // shows trend boxgraph within modal window, called when user clicks xaxis point
     private def trendBoxes[A](partition: String, partitionValue: String, interval: String) = 
         Seq[Frag](
             div(cls := "text-3xl font-semibold", s"Trends - $partitionValue"),
@@ -137,19 +143,4 @@ object Contents:
         case GET -> Root / "modal" / "trends" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
             Ok(modal(trendBoxes(partition, partitionValue, intervals(i).toLowerCase())).toString)
-            /*
-            Api.pAndI(partition, intervals(i).toLowerCase())((pt, it) =>
-                val (from, to) = it match
-                    case QueryInterval.Day => (7, 0)
-                    case QueryInterval.Week => (10, 0)
-                    case QueryInterval.Month => (12, 0)
-                    case QueryInterval.Year => (5, 0)
-                SQLite.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
-                    println("\n" ++ "*" * 20 ++ "\n")
-                    val boxes = Data.toBoxedMap(ps, _.dateNumber)
-                    println(boxes)
-                    Ok(modal(trendBoxes(partition, partitionValue, intervals(i).toLowerCase())).toString)
-                )
-            ).getOrElse(NotFound())
-            */
     }
