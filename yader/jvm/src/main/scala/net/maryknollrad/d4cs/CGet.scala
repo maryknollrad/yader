@@ -196,7 +196,9 @@ case class CGet(val callingAe: String, val calledAe: String, val remoteHost: Str
 
     def getDicomInputStreamAndFree(sopInstanceUid: String) = 
         val k = sopInstanceUid.trim
-        val r = imageStorage.get(k).map(ba => DicomInputStream(java.io.ByteArrayInputStream(ba.toByteArray()))).toRight(s"Cannot find SOPInstanceUID in memory $sopInstanceUid, currently holing ${imageStorage.size} items")
+        val r = imageStorage.get(k).map(ba => 
+                    DicomInputStream(java.io.ByteArrayInputStream(ba.toByteArray())))
+                .toRight(s"Cannot find SOPInstanceUID in memory $sopInstanceUid, currently holing ${imageStorage.size} items")
         imageStorage -= k
         r
 

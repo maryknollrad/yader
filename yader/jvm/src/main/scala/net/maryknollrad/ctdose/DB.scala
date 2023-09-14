@@ -26,3 +26,6 @@ object DB:
 
     case class Partitioned(part: String, studydate: String, dateNumber: Int, accessionNumber: String, patientId: String, 
         dose1: Double, dose2: Double, rank: Int) derives upickle.default.ReadWriter
+
+    enum LogType:
+        case  LastProcessedDate, Debug, Info, Warn, Error

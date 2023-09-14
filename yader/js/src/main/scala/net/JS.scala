@@ -96,8 +96,11 @@ object JS:
             anon.Data(boxData).setType("boxPlot").setName("box"),
             anon.Data(outData).setType("scatter").setName("outliers"))
 
-        ApexCharts.exec(doseBoxChartId, "updateSeries", data)
-        ApexCharts.exec(doseBoxChartId, "_windowResize")
+        val dbchart = ApexCharts.getChartByID(doseBoxChartId)
+        dbchart.foreach(c =>
+            c.updateSeries(data)
+            c.asInstanceOf[js.Dynamic]._windowResize()
+        )
 
     @JSExport 
     def updateCharts() = 

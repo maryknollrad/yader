@@ -89,7 +89,7 @@ object Configuration:
                 val tpath = c.getString("tesseract-path")
                 val isDLP = c.getBoolean("doseDLP")
                 val institutionNames = c.getStringList("institution").asScala.toList.map(_.trim().toUpperCase())
-                val storepng = getOptionalString("store-png")
+                val storepng = getOptionalString("store-png-path")
                 val encoding = c.getString("encoding")
                 val processBegin = getOptionalString("process-begin").map(LocalDate.parse)
                 val processDayBehind = getOptionalInt("process-day-behind").getOrElse(1)

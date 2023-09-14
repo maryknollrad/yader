@@ -61,19 +61,18 @@ object SQLite:
 
         (patient, log, study).mapN(_ + _ + _).transact(xa)
 
-    def log(msg: String, ltype: Int = 0) = 
-        sql"""INSERT INTO log (logtype, content) VALUES ($ltype, $msg)""".update.run
+    def log(msg: String, ltype: DB.LogType) = 
+        sql"""INSERT INTO log (logtype, content) VALUES (${ltype.ordinal}, $msg)""".update.run.transact(xa)
 
     private val logDateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
-    private val procedureSaveLogType = 1
-
     def updateLastDateProcessed(d: LocalDate) = 
-        log(logDateTimeFormatter.format(d), procedureSaveLogType).transact(xa)
+        log(logDateTimeFormatter.format(d), DB.LogType.LastProcessedDate)
 
     def getLastDateProcessed() = 
+        val typeInt = DB.LogType.LastProcessedDate.ordinal
         sql"""SELECT content FROM log 
-        | WHERE logtype = $procedureSaveLogType and 
-        | at = (SELECT max(at) FROM log WHERE logtype = $procedureSaveLogType)""".stripMargin
+        | WHERE logtype = $typeInt and 
+        | at = (SELECT max(at) FROM log WHERE logtype = $typeInt)""".stripMargin
             .query[String]
             .map(s => logDateTimeFormatter.parse(s).pipe(LocalDate.from))
             .option.transact(xa)
@@ -81,8 +80,15 @@ object SQLite:
     def getCountAndDoseSum() =
         sql"SELECT count(*), sum(dosevalue1), sdate FROM study, (SELECT min(studydate) as sdate FROM study)".query[(Int, Double, String)].unique.transact(xa)
 
-    def getLastLogs(ltype: Int = 0, count: Int = 10) = 
-        sql"SELECT content FROM log WHERE logtype = $ltype ORDER BY at DESC LIMIT $count".query[String].to[List].transact(xa)
+    def getLastLogs(ltypes: Seq[DB.LogType] = Seq.empty, count: Int = 10) = 
+        assert(count > 0)
+        val where = 
+            Option.when(ltypes.nonEmpty) :
+                val within = ltypes.map(_.ordinal).mkString("WHERE logtype IN (", ",", ")")
+                Fragment(within, List.empty)
+            .getOrElse(Fragment.empty)
+        val q  = sql"SELECT logtype, content FROM log $where ORDER BY at DESC LIMIT $count"
+        q.query[(Int, String)].to[List].transact(xa)
 
     def insertStudyAndPatient(study: Study, patient: Patient) = 
         val studyInsert = sql"""INSERT INTO study VALUES ($study)""".update.run

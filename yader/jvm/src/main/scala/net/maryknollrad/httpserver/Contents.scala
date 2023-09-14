@@ -41,19 +41,19 @@ object Contents:
                 div(s"Total $count CT exams, ${dosesum.round} mGy.cm since ${sdate}"),
                 div(institutionName)))
 
-    private def notifications(): IO[String] = 
-        SQLite.getLastLogs().map(ls =>
-            if ls.isEmpty then ""
-            else
-                // div(id := "noti", cls := "relative p-5 rounded-md bg-slate-900 text-emerald-400",
-                div(id := "noti", cls := "relative p-5 rounded-md bg-secondary text-secondary-content",
-                    // div(id := "notiLabel", cls := "absolute top-0 left-0 bg-amber-200 text-slate-950 text-xl rounded-sm p-1.5",
-                    div(id := "notiLabel", cls := "absolute top-0 left-0 bg-accent text-accent-content border-accent text-xl rounded-sm p-1.5",
-                        "Notifications"),
-                    div(id := "notiContents", cls := "pt-6 h-[100px] overflow-y-auto text-lg",
-                        ls.map(l => div(l))
-                    )).toString
-        )
+    private def notifications(ls: Seq[(Int, String)]): String = 
+        import net.maryknollrad.ctdose.DB.LogType.*
+        val classMap = Map(Info.ordinal -> "text-success", Warn.ordinal -> "text-warning", Error.ordinal -> "text-error")
+        if ls.isEmpty then ""
+        else
+            // div(id := "noti", cls := "relative p-5 rounded-md bg-slate-900 text-emerald-400",
+            div(id := "noti", cls := "relative p-5 rounded-md bg-secondary text-secondary-content",
+                // div(id := "notiLabel", cls := "absolute top-0 left-0 bg-amber-200 text-slate-950 text-xl rounded-sm p-1.5",
+                div(id := "notiLabel", cls := "absolute top-0 left-0 bg-accent text-accent-content border-accent text-xl rounded-sm p-1.5",
+                    "Notifications"),
+                div(id := "notiContents", cls := "pt-6 h-[100px] overflow-y-auto text-lg",
+                    ls.map((lt, tcontent) => div(cls := classMap(lt), tcontent))
+                )).toString
 
     private val intervals = Seq("Day", "Week", "Month", "Year")
     private def intervalButtons(selected: Int = 0) = 
@@ -68,7 +68,7 @@ object Contents:
 
     private def graphs() = 
         // div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-slate-900 p-5",
-        div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-primary p-5",
+        div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-primary p-5 space-y-10",
             intervalButtons(),
             div(id := "grdose", cls := "w-4/5"),
             div(id := "grbparts", cls := "w-2/5"),
@@ -125,7 +125,9 @@ object Contents:
                 Ok(header(dateString, count, dosesum, sdate, institutionName).toString))
 
         case GET -> Root / "notifications" =>
-            Ok(notifications())
+            import net.maryknollrad.ctdose.DB.LogType.*
+            SQLite.getLastLogs(ltypes = Seq(Info, Warn, Error)).flatMap(ls => 
+                Ok(notifications(ls)))
 
         case GET -> Root / "graphs" =>
             Ok(graphs())
