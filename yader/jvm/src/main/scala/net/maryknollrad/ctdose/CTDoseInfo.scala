@@ -65,8 +65,10 @@ object CTDoseInfo:
                             )).toEither.left.map(t => s"Error occurred during preparing insertion of patient : ${t.getMessage()}")
             imgIO       =  storeflag.flatMap(p =>
                             doseResult.map(dr => IO.blocking {
-                                val fname = java.nio.file.Paths.get(".", p, imap(Tag.StudyDate), s"${study.accessionNumber}.png")
-                                val of = fname.toFile()
+                                val folder = Seq(p, imap(Tag.StudyDate)).foldLeft(os.pwd)(_ / _)
+                                os.makeDir.all(folder)
+                                val fname = folder / s"${study.accessionNumber}.png"
+                                val of = fname.toIO
                                 javax.imageio.ImageIO.write(dr.image, "png", of)
                             }))
             warnEmpty   =   Option.when(cdr.emptyAttrs.nonEmpty) :
@@ -75,18 +77,12 @@ object CTDoseInfo:
                                 SQLite.log(msg, DB.LogType.Warn)
         yield (study, patient, imgIO.sequence, warnEmpty.sequence)
 
-    private def logMsg(d: LocalDate, successes: Seq[CTDoseResult], fails: Seq[String], store: Seq[Either[String, _]], startTime: Long) = 
-        val dStr = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val (storeSuccesses, storeFails) = store.partition(_.isRight).bimap(_.flatMap(_.toOption), _.flatMap(_.swap.toOption))
-        s"$dStr : ${successes.length} successful and ${fails.length} failed DICOM operations. " ++
-            s"${storeSuccesses.length} successful ${storeFails.length} DB operations in ${System.currentTimeMillis() - startTime}ms. " ++
-            s"${(fails ++ storeFails).mkString("Failure messages : [", ",", "]")}"
-
     def getDoseReportAndStore(conf: Configuration.CTDoseConfig, ctInfo: CTInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int]) = 
         val startTime = System.currentTimeMillis
         for
             successesAndFails   <-  CTDose.getCTDoses(conf, ctInfo, d, collectTags)
             (successes, fails)  =   successesAndFails
+            _                   <-  SQLite.logs(fails, DB.LogType.Error)
             stored              <-  successes.traverse(cdr =>
                                         makeInsertables(cdr, CTDose.getDefaultCollectTags(), conf.storepng)
                                             .traverse({
@@ -95,7 +91,14 @@ object CTDoseInfo:
                                                     *> oImageIo
                                                     *> oEmptyAttrWarnIo
                                             }))
-            _                   <-  SQLite.log(logMsg(d, successes, fails, stored, startTime), DB.LogType.Info)
+            (stores, storef)    =   stored.partition(_.isRight).bimap(_.flatMap(_.toOption), _.flatMap(_.swap.toOption))
+            _                   <-  SQLite.logs(storef, DB.LogType.Error)
+            _                   <-  if successes.length == stores.length then {
+                                        val dStr = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                        val msg = s"$dStr : ${successes.length} studies stored in ${System.currentTimeMillis() - startTime}ms"
+                                        SQLite.log(msg, DB.LogType.Info)
+                                    } else
+                                        IO.pure(0)
         yield ()
 
     extension[A] (as: Seq[A])

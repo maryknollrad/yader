@@ -1,5 +1,5 @@
 val sharedSettings = Seq(
-    scalaVersion := "3.3.0",
+    scalaVersion := "3.3.1",
     organization := "net.maryknollrad"
 )
 
@@ -36,6 +36,7 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
             "org.http4s" %% "http4s-ember-client" % http4sVersion,
             "com.lihaoyi" %% "scalatags" % "0.12.0",
             "com.lihaoyi" %% "upickle" % "3.1.2",
+            "com.lihaoyi" %% "os-lib" % "0.9.1",
         ),
         assembly / mainClass := Some("Demo"),
         assembly / assemblyMergeStrategy := {

@@ -255,12 +255,12 @@ object CTDose:
                                     dicomReader.setInput(dis)
                                     val im = dicomReader.read(0, dicomReader.getDefaultReadParam())
                                     val ocrResult = Tesseract.doOCR(im)
-                                    val marked = drawString(im, acno)
                                     val finalResult = reg.findFirstMatchIn(ocrResult) match
                                         case Some(m) =>
                                             findFirstDoubleStringInMatch(m)
                                         case _ =>
                                             None
+                                    val marked = drawString(im, s"$acno - ${finalResult.map(_.toString).getOrElse("NOT FOUND")}")
                                     DoseResultRaw(acno, finalResult, ocrResult, marked)
                                 )
                             )

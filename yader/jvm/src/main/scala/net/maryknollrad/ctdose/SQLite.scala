@@ -64,6 +64,11 @@ object SQLite:
     def log(msg: String, ltype: DB.LogType) = 
         sql"""INSERT INTO log (logtype, content) VALUES (${ltype.ordinal}, $msg)""".update.run.transact(xa)
 
+    def logs(msgs: Seq[String], ltype: DB.LogType) = 
+        val iq = """INSERT INTO log (logtype, content) VALUES (?, ?)"""
+        val inserts = msgs.map((ltype.ordinal, _))
+        Update[(Int, String)](iq).updateMany(inserts).transact(xa)
+
     private val logDateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
     def updateLastDateProcessed(d: LocalDate) = 
         log(logDateTimeFormatter.format(d), DB.LogType.LastProcessedDate)

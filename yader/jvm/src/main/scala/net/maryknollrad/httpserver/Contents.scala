@@ -52,7 +52,7 @@ object Contents:
                 div(id := "notiLabel", cls := "absolute top-0 left-0 bg-accent text-accent-content border-accent text-xl rounded-sm p-1.5",
                     "Notifications"),
                 div(id := "notiContents", cls := "pt-6 h-[100px] overflow-y-auto text-lg",
-                    ls.map((lt, tcontent) => div(cls := classMap(lt), tcontent))
+                    ls.map((lt, tcontent) => div(cls := classMap.getOrElse(lt, "text-primary-content"), tcontent))
                 )).toString
 
     private val intervals = Seq("Day", "Week", "Month", "Year")
