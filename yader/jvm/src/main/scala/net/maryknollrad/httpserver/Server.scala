@@ -22,7 +22,6 @@ object HttpServer:
             Ok(Contents.index, `Content-Type`(textHtmlType))
 
         case request@GET -> Root / "yader.js" =>
-            // StaticFile.fromath(Path("/Users/nineclue/lab/yader-f/target/scala-3.3.0/yaderf-fastopt/main.js"), Some(request)).getOrElseF(NotFound())
             StaticFile.fromPath(Path("./yader/js/target/scala-3.3.0/yader-fastopt/main.js"), Some(request)).getOrElseF(NotFound())
 
         case request@GET -> Root / "assets" / file =>
@@ -31,7 +30,7 @@ object HttpServer:
 
     def server(cdi: CTDoseConfig) = 
         val portNum = cdi.webPort.getOrElse(7878)
-        val yaderService = Router("/" -> staticService, "/api" -> Api.apiService, "/c" -> Contents.contentService(cdi.institution.head))
+        val yaderService = Router("/" -> staticService, "/api" -> Api.apiService, "/c" -> Contents.contentService(cdi.institution.head, cdi.doseDLP))
         /*
         val service = CORS.policy.withAllowOriginHost(Set(
                 Origin.Host(Uri.Scheme.http, Uri.RegName("localhost"), Some(5000)),

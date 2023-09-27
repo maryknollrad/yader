@@ -24,7 +24,7 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
             "org.dcm4che" % "dcm4che-net" % dcm4cheVersion,
             "org.dcm4che" % "dcm4che-imageio" % dcm4cheVersion,
 
-            "org.ekrich" %% "sconfig" % "1.5.0",
+            "org.ekrich" %% "sconfig" % "1.5.1",
             "net.sourceforge.tess4j" % "tess4j" % "5.8.0",
             "org.slf4j" % "slf4j-simple" % "2.0.7",
             "org.tpolecat" %% "doobie-core" % "1.0.0-RC4",
@@ -38,7 +38,7 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
             "com.lihaoyi" %% "upickle" % "3.1.2",
             "com.lihaoyi" %% "os-lib" % "0.9.1",
         ),
-        assembly / mainClass := Some("Demo"),
+        assembly / mainClass := Some("Yader"),
         assembly / assemblyMergeStrategy := {
             case PathList("module-info.class") => MergeStrategy.last
             case path if path.endsWith("/module-info.class") => MergeStrategy.last

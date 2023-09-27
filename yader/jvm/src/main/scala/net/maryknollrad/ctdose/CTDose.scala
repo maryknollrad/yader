@@ -137,7 +137,7 @@ object CTDose:
     // CONSIDER : request physicial, study order code, contrast material
     private val defaultCollectTags = Seq(Tag.PatientID, Tag.PatientSex, Tag.PatientBirthDate, Tag.AccessionNumber, 
         Tag.StudyDate, Tag.StudyTime, Tag.StudyDescription, Tag.ProtocolName, Tag.BodyPartExamined, 
-        Tag.InstitutionName, Tag.Manufacturer, Tag.ManufacturerModelName, Tag.StationName, Tag.OperatorsName)
+        Tag.InstitutionName, Tag.Manufacturer, Tag.ManufacturerModelName, Tag.StationName, Tag.OperatorsName, Tag.ReferringPhysicianName)
     def getDefaultCollectTags() = defaultCollectTags
 
     private def ioprint[A](msg: String = "")(ans: IO[A]) = ans.flatMap(a => IO({println(s"$msg : $a"); a}))

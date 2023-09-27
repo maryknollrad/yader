@@ -14,7 +14,7 @@ import CTDoseInfo.*
 object Configuration:
     case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
     type TesseractPath = String
-    case class CTDoseConfig(connectionInfo: ConnectionInfo, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Option[String], encoding: String,
+    case class CTDoseConfig(connectionInfo: ConnectionInfo, db: DB, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Option[String], encoding: String,
         processBegin: Option[LocalDate], processDayBehind: Int, pauseInterval: Int, calendarEvent: Option[String], webPort: Option[Int])
 
     def ctInfo() = 
@@ -72,7 +72,7 @@ object Configuration:
                     nerrs.asLeft[Map[(String, String), CTDoseSeriesInfo]]
             )
 
-    def apply(fname: String = "dicom"): Either[String, CTDoseConfig] =
+    def apply(fname: String = "yader"): Either[String, CTDoseConfig] =
         val ifile = File(s"$fname.conf")
         if ifile.exists() then 
             Try:
@@ -96,8 +96,15 @@ object Configuration:
                 val pauseInterval = getOptionalInt("pause-interval").getOrElse(0)
                 val calev = getOptionalString("calendar-event")
                 val webport = getOptionalInt("web-port-number")
+                val db: DB = 
+                    { for
+                        db   <- getOptionalString("postgres-db")
+                        user <- getOptionalString("postgres-user")
+                        pass <- getOptionalString("postgres-password")
+                    yield Postgresql(db, user, pass) }.getOrElse(SQLite)
+
                 assert(processDayBehind >= 0 && pauseInterval >= 0)
-                CTDoseConfig(ci, tpath, isDLP, institutionNames, storepng, encoding, 
+                CTDoseConfig(ci, db, tpath, isDLP, institutionNames, storepng, encoding, 
                     processBegin, processDayBehind, pauseInterval, calev, webport)
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")

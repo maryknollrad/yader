@@ -33,12 +33,13 @@ object Contents:
         )
     )
 
-    private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String) = 
+    private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean) = 
+        val doseUnit = if isDLP then "mGy.cm" else "mGy"
         // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
         div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary bg-primary", 
             div(cls := "w-1/4 text-5xl align-middle", dateString),
             div(cls := "grow text-xl text-right", 
-                div(s"Total $count CT exams, ${dosesum.round} mGy.cm since ${sdate}"),
+                div(s"Total $count CT exams, ${dosesum.round} ${doseUnit} since ${sdate}"),
                 div(institutionName)))
 
     private def notifications(ls: Seq[(Int, String)]): String = 
@@ -47,11 +48,11 @@ object Contents:
         if ls.isEmpty then ""
         else
             // div(id := "noti", cls := "relative p-5 rounded-md bg-slate-900 text-emerald-400",
-            div(id := "noti", cls := "relative p-5 rounded-md bg-secondary text-secondary-content",
+            div(id := "noti", cls := "relative p-5 rounded-md bg-secondary text-secondary-content h-30",
                 // div(id := "notiLabel", cls := "absolute top-0 left-0 bg-amber-200 text-slate-950 text-xl rounded-sm p-1.5",
                 div(id := "notiLabel", cls := "absolute top-0 left-0 bg-accent text-accent-content border-accent text-xl rounded-sm p-1.5",
                     "Notifications"),
-                div(id := "notiContents", cls := "pt-6 h-[100px] overflow-y-auto text-lg",
+                div(id := "notiContents", cls := "pt-6 h-40 overflow-y-auto text-lg",
                     ls.map((lt, tcontent) => div(cls := classMap.getOrElse(lt, "text-primary-content"), tcontent))
                 )).toString
 
@@ -118,11 +119,11 @@ object Contents:
 
     import net.maryknollrad.ctdose.DB.QueryInterval
 
-    def contentService(institutionName: String) = HttpRoutes.of[IO] {
+    def contentService(institutionName: String, isDLP: Boolean) = HttpRoutes.of[IO] {
         case GET -> Root / "header" =>
             val dateString = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
             SQLite.getCountAndDoseSum().flatMap((count, dosesum, sdate) =>
-                Ok(header(dateString, count, dosesum, sdate, institutionName).toString))
+                Ok(header(dateString, count, dosesum, sdate, institutionName, isDLP).toString))
 
         case GET -> Root / "notifications" =>
             import net.maryknollrad.ctdose.DB.LogType.*

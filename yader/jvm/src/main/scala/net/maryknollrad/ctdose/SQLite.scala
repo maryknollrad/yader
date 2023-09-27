@@ -13,11 +13,16 @@ import doobie.implicits.javatimedrivernative._
 import DB.*
 import java.time.format.DateTimeFormatter
 
-object SQLite:
+object SQLite extends DB:
     val xa = Transactor.fromDriverManager[IO](
         "org.sqlite.JDBC", "jdbc:sqlite:ctdose.db", None
     )
 
+    val now: String = "datetime('now', 'localtime')"
+    def intervals(value: String): Seq[Fragment] = 
+        Seq("j", "W", "m", "Y").map(t => Fragment.const(s"cast(strftime('%$t', $value) as integer)"))
+
+    /*
     // TODO: 연달아 대문자면 오류!
     def toLowerCaseFieldName(s: String) = 
         s.head.toLower +: s.tail.map(_ match 
@@ -25,8 +30,11 @@ object SQLite:
             case ch if ch.isUpper => s"_${ch.toLower}"
             case ch => ch
         ).mkString("")
-    
+    */
+
+    /*
     def createStudyTableSQL(tags: Seq[Int]) = 
+        /*
         // first 4 are accession number, patient related 3 fields and exclude institution name
         val midFields = tags.drop(4).withFilter(_ != Tag.InstitutionName).map(t => 
             val fname = ElementDictionary.keywordOf(t, null).pipe(toLowerCaseFieldName)
@@ -36,6 +44,7 @@ object SQLite:
                 case _ => "TEXT"
             s"$fname $ftype"
         )
+        */
         val createSQL = """
         | CREATE TABLE IF NOT EXISTS study
         | (acno TEXT NOT NULL, patientid TEXT NOT NULL REFERENCES patient (id),
@@ -131,7 +140,7 @@ object SQLite:
             |WHERE stime BETWEEN (tnum - $from) AND (tnum - $to) $subFragged""".stripMargin
 
         qSql.query[Partitioned].to[List].transact(SQLite.xa)
-        
+    */        
 /* QUERIES
 select body_part_examined, dose_value from study order by body_part_examined, dose_value;
 select body_part_examined, avg(dose_value) from study group by body_part_examined;

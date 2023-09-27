@@ -1350,8 +1350,8 @@ html {
   display: table;
 }
 
-.h-\[100px\] {
-  height: 100px;
+.h-40 {
+  height: 10rem;
 }
 
 .min-h-screen {
@@ -1540,6 +1540,11 @@ html {
   color: rgb(52 211 153 / var(--tw-text-opacity));
 }
 
+.text-error {
+  --tw-text-opacity: 1;
+  color: hsl(var(--er) / var(--tw-text-opacity));
+}
+
 .text-primary-content {
   --tw-text-opacity: 1;
   color: hsl(var(--pc) / var(--tw-text-opacity));
@@ -1553,11 +1558,6 @@ html {
 .text-slate-950 {
   --tw-text-opacity: 1;
   color: rgb(2 6 23 / var(--tw-text-opacity));
-}
-
-.text-error {
-  --tw-text-opacity: 1;
-  color: hsl(var(--er) / var(--tw-text-opacity));
 }
 
 .text-success {

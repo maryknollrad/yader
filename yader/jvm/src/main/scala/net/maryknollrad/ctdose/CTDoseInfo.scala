@@ -57,7 +57,7 @@ object CTDoseInfo:
                                 LocalTime.parse(imap(Tag.StudyTime), timeformatter),
                                 imap(Tag.StudyDescription), imap(Tag.ProtocolName), imap(Tag.BodyPartExamined), 
                                 imap(Tag.Manufacturer), imap(Tag.ManufacturerModelName), imap(Tag.StationName), 
-                                imap(Tag.OperatorsName), dose, 0.0) 
+                                imap(Tag.OperatorsName), imap(Tag.ReferringPhysicianName), 0.0, 0.0) 
                             }.toEither.left.map(t => s"Error occurred during preparing insertion of study : ${t.getMessage()}")
             patient     <- Try(
                             DB.Patient(imap(Tag.PatientID), imap(Tag.PatientSex).trim, 
@@ -73,13 +73,14 @@ object CTDoseInfo:
                             }))
             warnEmpty   =   Option.when(cdr.emptyAttrs.nonEmpty) :
                                 val emptyTagNames = cdr.emptyAttrs.map(tag => ElementDictionary.keywordOf(tag, null)).mkString(",")
-                                val msg = s"Accession number : ${imap(Tag.AccessionNumber)} has following empty dicom tags - $emptyTagNames"
+                                val tagStr = if cdr.emptyAttrs.length == 1 then "tag" else "tags"
+                                val msg = s"Accession number : ${imap(Tag.AccessionNumber)} has following empty dicom $tagStr - $emptyTagNames"
                                 SQLite.log(msg, DB.LogType.Warn)
         yield (study, patient, imgIO.sequence, warnEmpty.sequence)
 
     def getDoseReportAndStore(conf: Configuration.CTDoseConfig, ctInfo: CTInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int]) = 
-        val startTime = System.currentTimeMillis
         for
+            startTime           <-  IO.blocking(System.currentTimeMillis()) // prevents parallel execution 
             successesAndFails   <-  CTDose.getCTDoses(conf, ctInfo, d, collectTags)
             (successes, fails)  =   successesAndFails
             _                   <-  SQLite.logs(fails, DB.LogType.Error)
@@ -95,7 +96,8 @@ object CTDoseInfo:
             _                   <-  SQLite.logs(storef, DB.LogType.Error)
             _                   <-  if successes.length == stores.length then {
                                         val dStr = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                                        val msg = s"$dStr : ${successes.length} studies stored in ${System.currentTimeMillis() - startTime}ms"
+                                        val runtime = String.format("%.1f", (System.currentTimeMillis() - startTime) / 1000.0)
+                                        val msg = s"$dStr : processed ${successes.length} studies in ${runtime}s"
                                         SQLite.log(msg, DB.LogType.Info)
                                     } else
                                         IO.pure(0)
@@ -111,7 +113,7 @@ object CTDoseInfo:
     def processDoseReport(conf: Configuration.CTDoseConfig, ctInfo: CTInfo, collectTags: Option[Seq[Int]] = None) = 
         val ctags = collectTags.getOrElse(CTDose.getDefaultCollectTags())
         for 
-            _               <-  SQLite.createTablesIfNotExists(ctags)
+            _               <-  SQLite.createTablesIfNotExists()
             olastDate       <-  SQLite.getLastDateProcessed()
             _               <-  { 
                                 val beginDate = olastDate match
@@ -119,12 +121,14 @@ object CTDoseInfo:
                                     case _ => conf.processBegin.getOrElse(LocalDate.now().minusDays(conf.processDayBehind))
                                 val endDate = LocalDate.now().minusDays(conf.processDayBehind)
                                 val dstream = beginDate.datesUntil(endDate.plusDays(1)).iterator().asScala.toSeq
-                                SQLite.log(s"Processing $beginDate ~ $endDate", DB.LogType.Debug)
+                                val lmsg = if !beginDate.isAfter(endDate) then s"Processing $beginDate ~ $endDate"
+                                           else s"Skipping $beginDate"
+                                SQLite.log(lmsg, DB.LogType.Debug)
                                 *> 
                                 dstream.map(d =>
                                     logger.info("Processing date : {}", d)
                                     getDoseReportAndStore(conf, ctInfo, d, ctags) 
-                                    *> SQLite.updateLastDateProcessed(d)
+                                    *> SQLite.updateLastDateProcessed(d) *> IO.unit
                                 ).intervene(IO.sleep(conf.pauseInterval.seconds)).sequence
                                 }
         yield ()

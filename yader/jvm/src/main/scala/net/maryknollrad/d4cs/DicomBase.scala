@@ -29,6 +29,30 @@ object DicomBase:
     // enum GatherLevel:
     //     case GatherNone, StudyLevel, SeriesLevel, ImageLevel
 
+    import scala.jdk.CollectionConverters.*
+    extension (attr: Attributes)
+        def getNestedString(tags: Seq[Int]): Option[String] = 
+            def h(a: Attributes, ts: Seq[Int]): Option[String] = 
+                    if ts.length == 0 then
+                        None
+                    else if ts.length == 1 then
+                        Option(a.getString(ts(0)))
+                    else
+                        val vr = ElementDictionary.vrOf(ts(0), attr.getPrivateCreator(ts(0)))
+                        vr match
+                            case VR.SQ => 
+                                val sq = a.getSequence(ts(0))
+                                sq.asScala.find(_.tags.contains(ts(1))).flatMap(h(_, ts.tail))
+                            case _ =>
+                                None
+            h(attr, tags)
+
+        def getNestedString(tagStringWithDotSeparator: String): Option[String] = 
+            scala.util.Try:
+                val tags = tagStringWithDotSeparator.split('.').map(ElementDictionary.tagForKeyword(_, null))
+                getNestedString(tags)
+            .toOption.flatten
+
 trait DicomBase:
     import DicomBase.* 
 
