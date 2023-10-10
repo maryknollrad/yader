@@ -13,12 +13,15 @@ import doobie.implicits.javatimedrivernative._
 import DB.*
 import java.time.format.DateTimeFormatter
 
-object SQLite extends DB:
+case class SQLite() extends DB:
     val xa = Transactor.fromDriverManager[IO](
         "org.sqlite.JDBC", "jdbc:sqlite:ctdose.db", None
     )
 
+    val datetimeType = "DATETIME"
     val now: String = "datetime('now', 'localtime')"
+    val minStudyDateAsString: String = "min(studydate)"
+
     def intervals(value: String): Seq[Fragment] = 
         Seq("j", "W", "m", "Y").map(t => Fragment.const(s"cast(strftime('%$t', $value) as integer)"))
 

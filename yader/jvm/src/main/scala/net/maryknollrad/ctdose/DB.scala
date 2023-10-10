@@ -1,6 +1,7 @@
 package net.maryknollrad.ctdose
 
 import java.time.{LocalDate, LocalTime}
+import doobie.postgres.implicits.*
 
 object DB:
     case class Study(accessionNumber: String, patientId: String, studyDate: LocalDate, studyTime: LocalTime, 
@@ -40,14 +41,18 @@ trait DB:
     import DB.* 
 
     val xa: Transactor.Aux[IO, Unit]
+    val datetimeType: String
     val now: String
+    // select min(studydate) as string 
+    // sqlite : no need to convert, postgresql : use to_char
+    val minStudyDateAsString: String    
     def intervals(value: String): Seq[Fragment]
-    val timeIntervals = intervals(now).zip(intervals("studydate"))
-    assert(timeIntervals.length == QueryInterval.qiSize)
+    lazy val timeIntervals = intervals(now).zip(intervals("studydate"))
+    // assert(timeIntervals.length == QueryInterval.qiSize)
 
     protected val createStudiesSQL = Fragment.const("""CREATE TABLE IF NOT EXISTS studies
-        | (acno TEXT NOT NULL, patientid TEXT NOT NULL REFERENCES patient (id),
-        | studydate DATE NOT NULL, studytime TIME NOT NULL, studydescription TEXT NOT NULL, alternative TEXT, 
+        | (acno TEXT NOT NULL, patientid TEXT NOT NULL REFERENCES patients (id),
+        | studydate DATE NOT NULL, studytime TIME NOT NULL, studydescription TEXT NOT NULL, alternative TEXT NOT NULL, 
         | bodypart TEXT NOT NULL, manufacturer TEXT NOT NULL, modelname TEXT NOT NULL, station TEXT NOT NULL, 
         | operator TEXT NOT NULL, physician TEXT NOT NULL, dosevalue1 REAL NOT NULL DEFAULT 0.0, dosevalue2 REAL NOT NULL DEFAULT 0.0)
         """.stripMargin).update.run
@@ -55,10 +60,10 @@ trait DB:
     protected val createPatientsSQL = Fragment.const("""CREATE TABLE IF NOT EXISTS patients
         | (id TEXT NOT NULL PRIMARY KEY, sex TEXT NOT NULL, birthday DATE NOT NULL)""".stripMargin).update.run
 
-    protected val createLogsSQL = Fragment.const(s"""CREATE TABLE IF NOT EXISTS logs  
-        | (createtime DATETIME NOT NULL DEFAULT $now, 
-        | logtype INTEGER NOT NULL DEFAULT 0, content TEXT NOT NULL)
-        """.stripMargin).update.run
+    protected lazy val createLogsSQL = 
+        Fragment.const(s"""CREATE TABLE IF NOT EXISTS logs  
+        | (logtime $datetimeType NOT NULL DEFAULT ($now), 
+        | logtype INTEGER NOT NULL DEFAULT 0, content TEXT NOT NULL)""".stripMargin).update.run
 
     def createTablesIfNotExists() = 
         (createPatientsSQL, createLogsSQL, createStudiesSQL).mapN(_ + _ + _).transact(xa)
@@ -79,13 +84,14 @@ trait DB:
         val typeInt = DB.LogType.LastProcessedDate.ordinal
         sql"""SELECT content FROM logs 
         | WHERE logtype = $typeInt and 
-        | createtime = (SELECT max(createtime) FROM logs WHERE logtype = $typeInt)""".stripMargin
+        | logtime = (SELECT max(logtime) FROM logs WHERE logtype = $typeInt)""".stripMargin
             .query[String]
             .map(s => logDateTimeFormatter.parse(s).pipe(LocalDate.from))
             .option.transact(xa)
 
     def getCountAndDoseSum() =
-        sql"SELECT count(*), sum(dosevalue1), sdate FROM studies, (SELECT min(studydate) as sdate FROM studies)".query[(Int, Double, String)].unique.transact(xa)
+        val s = Fragment.const(s"SELECT count(*), sum(dosevalue1), (SELECT $minStudyDateAsString as mindate FROM studies) FROM studies")
+        s.query[(Int, Double, String)].unique.transact(xa)
 
     def getLastLogs(ltypes: Seq[DB.LogType] = Seq.empty, count: Int = 10) = 
         assert(count > 0)
@@ -94,21 +100,27 @@ trait DB:
                 val within = ltypes.map(_.ordinal).mkString("WHERE logtype IN (", ",", ")")
                 Fragment(within, List.empty)
             .getOrElse(Fragment.empty)
-        val q  = sql"SELECT logtype, content FROM logs $where ORDER BY at DESC LIMIT $count"
+        val q  = sql"SELECT logtype, content FROM logs $where ORDER BY logtime DESC LIMIT $count"
         q.query[(Int, String)].to[List].transact(xa)
 
     def insertStudyAndPatient(study: Study, patient: Patient) = 
-        val studyInsert = sql"""INSERT INTO studies VALUES ($study)""".update.run
-        val patientInsert = sql"""INSERT INTO patients VALUES ($patient) ON CONFLICT DO NOTHING""".update.run
+        val studyInsert = sql"""INSERT INTO studies VALUES 
+            | (${study.accessionNumber}, ${study.patientId}, ${study.studyDate}, ${study.studyTime},
+            | ${study.description}, ${study.alternative}, ${study.bodypart}, ${study.manufacturer},
+            | ${study.model}, ${study.station}, ${study.operator}, ${study.physician},
+            | ${study.dose1}, ${study.dose2})""".stripMargin.update.run
+        val patientInsert = sql"""INSERT INTO patients VALUES (${patient.id}, ${patient.sex}, ${patient.birthday}) ON CONFLICT DO NOTHING""".update.run
         patientInsert.combine(studyInsert).transact(xa)
 
     def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
+        println(timeIntervals)
         val (today, studydate) = timeIntervals(interval.ordinal)
-        fr"""SELECT bodypart, $studydate as stime, count(*) as bcount 
-        |FROM studies, (SELECT $today as tnum) 
-        |WHERE stime BETWEEN (tnum - $from) AND (tnum - $to) AND bodypart NOT LIKE '*%' 
+        val sql = fr"""SELECT bodypart, count(*) as bcount 
+        |FROM studies, (SELECT $today as today) as t 
+        |WHERE $studydate BETWEEN (t.today - $from) AND (t.today - $to) AND bodypart NOT LIKE '*%' 
         |GROUP BY bodypart ORDER BY bcount DESC""".stripMargin
-            .query[(String, Int, Long)].to[List].transact(xa)
+        println(sql)
+        sql.query[(String, Long)].to[List].transact(xa)
 
     def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
         val pfrag = Fragment.const0(partition.strValue)
@@ -117,7 +129,7 @@ trait DB:
         val subFragged = subpartition.map(p => fr"AND $pfrag = $p").getOrElse(Fragment.empty)
         val qSql = fr"""SELECT $pfrag, studydate, $studydate as stime, acno, patientid, 
             |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studydate ORDER BY dosevalue1) FROM studies,
-            |(SELECT $today AS tnum) 
-            |WHERE stime BETWEEN (tnum - $from) AND (tnum - $to) $subFragged""".stripMargin
-
-        qSql.query[Partitioned].to[List].transact(SQLite.xa)
+            |(SELECT $today as today) as t 
+            |WHERE $studydate BETWEEN (t.today - $from) AND (t.today - $to) $subFragged""".stripMargin
+        println(qSql.toString)
+        qSql.query[Partitioned].to[List].transact(xa)

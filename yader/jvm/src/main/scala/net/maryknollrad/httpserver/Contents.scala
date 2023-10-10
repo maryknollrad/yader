@@ -6,7 +6,7 @@ import org.http4s.dsl.io.*
 import scalatags.Text.all.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import net.maryknollrad.ctdose.SQLite
+import net.maryknollrad.ctdose.DB
 import net.maryknollrad.ctdose.DB.Partitioned
 
 object Contents:
@@ -33,14 +33,15 @@ object Contents:
         )
     )
 
-    private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean) = 
+case class Contents(db: DB, institutionName: String, isDLP: Boolean):
+    private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean): String = 
         val doseUnit = if isDLP then "mGy.cm" else "mGy"
         // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
         div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary bg-primary", 
             div(cls := "w-1/4 text-5xl align-middle", dateString),
             div(cls := "grow text-xl text-right", 
                 div(s"Total $count CT exams, ${dosesum.round} ${doseUnit} since ${sdate}"),
-                div(institutionName)))
+                div(institutionName))).toString
 
     private def notifications(ls: Seq[(Int, String)]): String = 
         import net.maryknollrad.ctdose.DB.LogType.*
@@ -119,15 +120,17 @@ object Contents:
 
     import net.maryknollrad.ctdose.DB.QueryInterval
 
-    def contentService(institutionName: String, isDLP: Boolean) = HttpRoutes.of[IO] {
+    val contentService = HttpRoutes.of[IO] {
         case GET -> Root / "header" =>
+            println("header!")
             val dateString = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-            SQLite.getCountAndDoseSum().flatMap((count, dosesum, sdate) =>
-                Ok(header(dateString, count, dosesum, sdate, institutionName, isDLP).toString))
+            db.getCountAndDoseSum().flatMap((count, dosesum, sdate) =>
+                println(s"$count, $dosesum since $sdate")
+                Ok(header(dateString, count, dosesum, sdate, institutionName, isDLP)))
 
         case GET -> Root / "notifications" =>
             import net.maryknollrad.ctdose.DB.LogType.*
-            SQLite.getLastLogs(ltypes = Seq(Info, Warn, Error)).flatMap(ls => 
+            db.getLastLogs(ltypes = Seq(Info, Warn, Error)).flatMap(ls => 
                 Ok(notifications(ls)))
 
         case GET -> Root / "graphs" =>
@@ -137,7 +140,7 @@ object Contents:
                         if i >= 0 && i <= QueryInterval.qiSize =>
             Api.pAndI(partition, intervals(i).toLowerCase())((pt, it) =>
                 val (from, to) = QueryInterval.defaultRange(it)
-                SQLite.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
+                db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
                     val (p5, outliers) = Data.toBoxData(ps)
                     Ok(modal(p5AndOutliers(partitionValue, p5, outliers)).toString)
                 )

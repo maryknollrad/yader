@@ -30,7 +30,9 @@ object HttpServer:
 
     def server(cdi: CTDoseConfig) = 
         val portNum = cdi.webPort.getOrElse(7878)
-        val yaderService = Router("/" -> staticService, "/api" -> Api.apiService, "/c" -> Contents.contentService(cdi.institution.head, cdi.doseDLP))
+        val api = Api(cdi.db)
+        val contents = Contents(cdi.db, cdi.institution.head, cdi.doseDLP)
+        val yaderService = Router("/" -> staticService, "/api" -> api.apiService, "/c" -> contents.contentService)
         /*
         val service = CORS.policy.withAllowOriginHost(Set(
                 Origin.Host(Uri.Scheme.http, Uri.RegName("localhost"), Some(5000)),

@@ -46,7 +46,8 @@ object CTDoseInfo:
     case class CTDoseResult(studyInfo: Seq[(Int, String)], results: Seq[DoseResultRaw], emptyAttrs: Seq[Int])
     
     private val timeformatter = DateTimeFormatter.ofPattern("HHmmss.SSS")
-    def makeInsertables(cdr: CTDoseResult, ctags: Seq[Int], storeflag: Option[String]): Either[String, (Study, Patient, IO[Option[Boolean]], IO[Option[Int]])] = 
+    def makeInsertables(cdr: CTDoseResult, ctags: Seq[Int], storeflag: Option[String], db: DB)
+            : Either[String, (Study, Patient, IO[Option[Boolean]], IO[Option[Int]])] = 
         val imap = cdr.studyInfo.toMap
         val doseResult = cdr.results.find(_.ocrResult.nonEmpty)
         val dose = doseResult.flatMap(_.ocrResult).getOrElse(-1.0)
@@ -57,7 +58,7 @@ object CTDoseInfo:
                                 LocalTime.parse(imap(Tag.StudyTime), timeformatter),
                                 imap(Tag.StudyDescription), imap(Tag.ProtocolName), imap(Tag.BodyPartExamined), 
                                 imap(Tag.Manufacturer), imap(Tag.ManufacturerModelName), imap(Tag.StationName), 
-                                imap(Tag.OperatorsName), imap(Tag.ReferringPhysicianName), 0.0, 0.0) 
+                                imap(Tag.OperatorsName), imap(Tag.ReferringPhysicianName), dose, 0.0) 
                             }.toEither.left.map(t => s"Error occurred during preparing insertion of study : ${t.getMessage()}")
             patient     <- Try(
                             DB.Patient(imap(Tag.PatientID), imap(Tag.PatientSex).trim, 
@@ -75,7 +76,7 @@ object CTDoseInfo:
                                 val emptyTagNames = cdr.emptyAttrs.map(tag => ElementDictionary.keywordOf(tag, null)).mkString(",")
                                 val tagStr = if cdr.emptyAttrs.length == 1 then "tag" else "tags"
                                 val msg = s"Accession number : ${imap(Tag.AccessionNumber)} has following empty dicom $tagStr - $emptyTagNames"
-                                SQLite.log(msg, DB.LogType.Warn)
+                                db.log(msg, DB.LogType.Warn)
         yield (study, patient, imgIO.sequence, warnEmpty.sequence)
 
     def getDoseReportAndStore(conf: Configuration.CTDoseConfig, ctInfo: CTInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int]) = 
@@ -83,22 +84,22 @@ object CTDoseInfo:
             startTime           <-  IO.blocking(System.currentTimeMillis()) // prevents parallel execution 
             successesAndFails   <-  CTDose.getCTDoses(conf, ctInfo, d, collectTags)
             (successes, fails)  =   successesAndFails
-            _                   <-  SQLite.logs(fails, DB.LogType.Error)
+            _                   <-  conf.db.logs(fails, DB.LogType.Error)
             stored              <-  successes.traverse(cdr =>
-                                        makeInsertables(cdr, CTDose.getDefaultCollectTags(), conf.storepng)
+                                        makeInsertables(cdr, CTDose.getDefaultCollectTags(), conf.storepng, conf.db)
                                             .traverse({
                                                 case (study, patient, oImageIo, oEmptyAttrWarnIo) =>
-                                                    SQLite.insertStudyAndPatient(study, patient)
+                                                    conf.db.insertStudyAndPatient(study, patient)
                                                     *> oImageIo
                                                     *> oEmptyAttrWarnIo
                                             }))
             (stores, storef)    =   stored.partition(_.isRight).bimap(_.flatMap(_.toOption), _.flatMap(_.swap.toOption))
-            _                   <-  SQLite.logs(storef, DB.LogType.Error)
+            _                   <-  conf.db.logs(storef, DB.LogType.Error)
             _                   <-  if successes.length == stores.length then {
                                         val dStr = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
                                         val runtime = String.format("%.1f", (System.currentTimeMillis() - startTime) / 1000.0)
                                         val msg = s"$dStr : processed ${successes.length} studies in ${runtime}s"
-                                        SQLite.log(msg, DB.LogType.Info)
+                                        conf.db.log(msg, DB.LogType.Info)
                                     } else
                                         IO.pure(0)
         yield ()
@@ -113,8 +114,8 @@ object CTDoseInfo:
     def processDoseReport(conf: Configuration.CTDoseConfig, ctInfo: CTInfo, collectTags: Option[Seq[Int]] = None) = 
         val ctags = collectTags.getOrElse(CTDose.getDefaultCollectTags())
         for 
-            _               <-  SQLite.createTablesIfNotExists()
-            olastDate       <-  SQLite.getLastDateProcessed()
+            _               <-  conf.db.createTablesIfNotExists()
+            olastDate       <-  conf.db.getLastDateProcessed()
             _               <-  { 
                                 val beginDate = olastDate match
                                     case Some(d) => d.plusDays(1)
@@ -123,12 +124,12 @@ object CTDoseInfo:
                                 val dstream = beginDate.datesUntil(endDate.plusDays(1)).iterator().asScala.toSeq
                                 val lmsg = if !beginDate.isAfter(endDate) then s"Processing $beginDate ~ $endDate"
                                            else s"Skipping $beginDate"
-                                SQLite.log(lmsg, DB.LogType.Debug)
+                                conf.db.log(lmsg, DB.LogType.Debug)
                                 *> 
                                 dstream.map(d =>
                                     logger.info("Processing date : {}", d)
                                     getDoseReportAndStore(conf, ctInfo, d, ctags) 
-                                    *> SQLite.updateLastDateProcessed(d) *> IO.unit
+                                    *> conf.db.updateLastDateProcessed(d) *> IO.unit
                                 ).intervene(IO.sleep(conf.pauseInterval.seconds)).sequence
                                 }
         yield ()

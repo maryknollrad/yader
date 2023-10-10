@@ -101,7 +101,7 @@ object Configuration:
                         db   <- getOptionalString("postgres-db")
                         user <- getOptionalString("postgres-user")
                         pass <- getOptionalString("postgres-password")
-                    yield Postgresql(db, user, pass) }.getOrElse(SQLite)
+                    yield Postgresql(db, user, pass) }.getOrElse(SQLite())
 
                 assert(processDayBehind >= 0 && pauseInterval >= 0)
                 CTDoseConfig(ci, db, tpath, isDLP, institutionNames, storepng, encoding, 

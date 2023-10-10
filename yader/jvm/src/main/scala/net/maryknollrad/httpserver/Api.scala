@@ -3,13 +3,14 @@ package net.maryknollrad.httpserver
 import cats.effect.*
 import org.http4s.* 
 import org.http4s.dsl.io.*
+import net.maryknollrad.ctdose.DB
 import net.maryknollrad.ctdose.DB.{QueryInterval, QueryPartition}
-import net.maryknollrad.ctdose.SQLite
+// import net.maryknollrad.ctdose.SQLite
 import doobie.*, doobie.implicits.* 
 import cats.syntax.all.* 
 import upickle.default.{ReadWriter => RW, macroRW, write}
 
-object Api:
+object Api: 
     def optionInterval(argument: String): Option[QueryInterval] =
         QueryInterval.values.find(_.strValue == argument)    
     
@@ -22,16 +23,18 @@ object Api:
             i <- optionInterval(interval)
         yield f(p, i)
 
+case class Api(db: DB):
+    import Api.*
     private def bpartsCounts(qi: QueryInterval, from: Int, to: Int) = 
-        SQLite.getBodypartCounts(qi, from, to).map(ts =>
+        db.getBodypartCounts(qi, from, to).map(ts =>
             val (cats, counts) = ts.foldLeft((Seq.empty[String], Seq.empty[Long]))({ 
-                case ((cats, counts), t) => (cats :+ t._1, counts :+ t._3)
+                case ((cats, counts), t) => (cats :+ t._1, counts :+ t._2)
             })
             (cats, counts)
         )
 
     private def doseBox(qi: QueryInterval, from: Int, to: Int) = 
-        SQLite.partitionedQuery(QueryPartition.Bodypart, qi, from = from, to = to)
+        db.partitionedQuery(QueryPartition.Bodypart, qi, from = from, to = to)
             .map(rs => Data.toBoxedMap(rs))
 
     val apiService = HttpRoutes.of[IO] {
@@ -57,7 +60,7 @@ object Api:
                     case QueryInterval.Week => (10, 0)
                     case QueryInterval.Month => (12, 0)
                     case QueryInterval.Year => (5, 0)
-                SQLite.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
+                db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
                     Ok(write(Data.toBoxedMap(ps, _.dateNumber)))
                 )).getOrElse(NotFound())
     }
