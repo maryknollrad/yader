@@ -113,13 +113,11 @@ trait DB:
         patientInsert.combine(studyInsert).transact(xa)
 
     def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
-        println(timeIntervals)
         val (today, studydate) = timeIntervals(interval.ordinal)
         val sql = fr"""SELECT bodypart, count(*) as bcount 
         |FROM studies, (SELECT $today as today) as t 
         |WHERE $studydate BETWEEN (t.today - $from) AND (t.today - $to) AND bodypart NOT LIKE '*%' 
         |GROUP BY bodypart ORDER BY bcount DESC""".stripMargin
-        println(sql)
         sql.query[(String, Long)].to[List].transact(xa)
 
     def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
@@ -131,5 +129,4 @@ trait DB:
             |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studydate ORDER BY dosevalue1) FROM studies,
             |(SELECT $today as today) as t 
             |WHERE $studydate BETWEEN (t.today - $from) AND (t.today - $to) $subFragged""".stripMargin
-        println(qSql.toString)
         qSql.query[Partitioned].to[List].transact(xa)

@@ -122,10 +122,8 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
 
     val contentService = HttpRoutes.of[IO] {
         case GET -> Root / "header" =>
-            println("header!")
             val dateString = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
             db.getCountAndDoseSum().flatMap((count, dosesum, sdate) =>
-                println(s"$count, $dosesum since $sdate")
                 Ok(header(dateString, count, dosesum, sdate, institutionName, isDLP)))
 
         case GET -> Root / "notifications" =>

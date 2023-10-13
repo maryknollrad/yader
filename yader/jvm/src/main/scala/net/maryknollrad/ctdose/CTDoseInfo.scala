@@ -59,11 +59,11 @@ object CTDoseInfo:
                                 imap(Tag.StudyDescription), imap(Tag.ProtocolName), imap(Tag.BodyPartExamined), 
                                 imap(Tag.Manufacturer), imap(Tag.ManufacturerModelName), imap(Tag.StationName), 
                                 imap(Tag.OperatorsName), imap(Tag.ReferringPhysicianName), dose, 0.0) 
-                            }.toEither.left.map(t => s"Error occurred during preparing insertion of study : ${t.getMessage()}")
+                            }.toEither.left.map(t => s"[${imap.getOrElse(Tag.StudyDate, "UNKNOWN DATE")}] Error while preparing Study: ${t.getMessage()}")
             patient     <- Try(
                             DB.Patient(imap(Tag.PatientID), imap(Tag.PatientSex).trim, 
                                 LocalDate.parse(imap(Tag.PatientBirthDate), DateTimeFormatter.BASIC_ISO_DATE)
-                            )).toEither.left.map(t => s"Error occurred during preparing insertion of patient : ${t.getMessage()}")
+                            )).toEither.left.map(t => s"[${imap.getOrElse(Tag.StudyDate, "UNKNOWN DATE")}] Error while preparing Patient (${imap.getOrElse(Tag.PatientID, "UNKNOWN ID")}): ${t.getMessage()}")
             imgIO       =  storeflag.flatMap(p =>
                             doseResult.map(dr => IO.blocking {
                                 val folder = Seq(p, imap(Tag.StudyDate)).foldLeft(os.pwd)(_ / _)
@@ -95,13 +95,12 @@ object CTDoseInfo:
                                             }))
             (stores, storef)    =   stored.partition(_.isRight).bimap(_.flatMap(_.toOption), _.flatMap(_.swap.toOption))
             _                   <-  conf.db.logs(storef, DB.LogType.Error)
-            _                   <-  if successes.length == stores.length then {
+            _                   <-  // if successes.length == stores.length then {
                                         val dStr = d.format(DateTimeFormatter.ISO_LOCAL_DATE)
                                         val runtime = String.format("%.1f", (System.currentTimeMillis() - startTime) / 1000.0)
                                         val msg = s"$dStr : processed ${successes.length} studies in ${runtime}s"
                                         conf.db.log(msg, DB.LogType.Info)
-                                    } else
-                                        IO.pure(0)
+                                    // } else IO.pure(0)
         yield ()
 
     extension[A] (as: Seq[A])
