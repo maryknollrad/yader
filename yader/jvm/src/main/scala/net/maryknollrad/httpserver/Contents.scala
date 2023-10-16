@@ -29,36 +29,40 @@ object Contents:
             div(id := "page", cls := "flex flex-col p-5 space-y-2 min-h-screen",
                 div(replace("/c/header"), "Header"),
                 div(replace("/c/notifications"), "Notifications"),
-                div(id := "tabContent",
+                div(id := "contents", 
                     div(replace("/c/graphs"), "Graphs"),
-                    div(id := "modalMark"),
-                div(cls := "btm-nav",
-                    button(cls := "active",
-                        svg(xmlns := "http://www.w3.org/2000/svg", cls := "h-5 w-5", fill := "none",
-                                viewBox := "0 0 24 24", stroke := "currentColor",
-                                path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2",
-                                        d := "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                                )),
-                        span(cls := "btm-nav-label", "Home")),
-                    button(
-                        svg(xmlns := "http://www.w3.org/2000/svg", cls := "h-5 w-5", fill := "none",
-                                viewBox := "0 0 24 24", stroke := "currentColor",
-                                path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2",
-                                        d := "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                )),
-                        span(cls := "btm-nav-label", "Warnings"))))
+                    div(id := "modalMark"))
+                )
             )
-        ))
+        )
 
 case class Contents(db: DB, institutionName: String, isDLP: Boolean):
+    private def drawer() = 
+      div(cls := "drawer", 
+        input(id := "menu-drawer", `type` :="checkbox", cls := "drawer-toggle"),
+        div(cls := "drawer-content",
+            label(`for` := "menu-drawer", cls := "btn btn-square btn-ghost drawer-button", 
+                svg(xmlns := "http://www.w3.org/2000/svg", fill := "none", viewBox := "0 0 24 24", cls := "inline-block w-8 h-8 stroke-current",
+                    path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2", d := "M4 6h16M4 12h16M4 18h16")))),
+        div(cls := "drawer-side",
+            label(`for` := "menu-drawer", aria.label := "close sidebar", cls := "drawer-overlay"),
+            ul(cls := "menu p-4 w-80 min-h-full bg-base-200 text-base-content",
+                li(a("Home")),
+                li(a("Edit CT exams")))))
+            
     private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean): String = 
         val doseUnit = if isDLP then "mGy.cm" else "mGy"
         // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
         div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary bg-primary", 
             div(cls := "w-1/4 text-5xl align-middle", dateString),
-            div(cls := "grow text-xl text-right", 
+            div(cls := "grow text-xl text-right mr-2", 
                 div(s"Total $count CT exams, ${dosesum.round} ${doseUnit} since ${sdate}"),
-                div(institutionName))).toString
+                div(institutionName)),
+            // drawer()
+            // button(cls :="btn btn-square btn-ghost",
+            //     svg(xmlns := "http://www.w3.org/2000/svg", fill := "none", viewBox := "0 0 24 24", cls := "inline-block w-8 h-8 stroke-current",
+            //         path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2", d := "M4 6h16M4 12h16M4 18h16")))
+        ).toString
 
     private def notifications(ls: Seq[(Int, String)]): String = 
         import net.maryknollrad.ctdose.DB.LogType.*
@@ -78,9 +82,9 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
     private def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
             div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
-            div(id := "intBtns", cls := "btn-group",
+            div(id := "intBtns", cls := "join",
                 intervals.zipWithIndex.map((interval, i) => 
-                    val c = "btn" ++ (if i == selected then " btn-active" else "")
+                    val c = "btn btn-outline" ++ (if i == selected then " btn-active" else "")
                     button(id := s"ibtn$i", cls := c, onclick := s"JS.intBtnClick($i)", interval))
             )
         )
