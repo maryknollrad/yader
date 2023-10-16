@@ -4,6 +4,8 @@ import cats.effect.*
 import org.http4s.* 
 import org.http4s.dsl.io.*
 import scalatags.Text.all.*
+import scalatags.Text.svgTags.{svg, path}
+import scalatags.Text.svgAttrs.{d, fill, viewBox, stroke, strokeLinecap, strokeLinejoin, strokeWidth}
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import net.maryknollrad.ctdose.DB
@@ -27,11 +29,26 @@ object Contents:
             div(id := "page", cls := "flex flex-col p-5 space-y-2 min-h-screen",
                 div(replace("/c/header"), "Header"),
                 div(replace("/c/notifications"), "Notifications"),
-                div(replace("/c/graphs"), "Graphs"),
-                div(id := "modalMark")
+                div(id := "tabContent",
+                    div(replace("/c/graphs"), "Graphs"),
+                    div(id := "modalMark"),
+                div(cls := "btm-nav",
+                    button(cls := "active",
+                        svg(xmlns := "http://www.w3.org/2000/svg", cls := "h-5 w-5", fill := "none",
+                                viewBox := "0 0 24 24", stroke := "currentColor",
+                                path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2",
+                                        d := "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                                )),
+                        span(cls := "btm-nav-label", "Home")),
+                    button(
+                        svg(xmlns := "http://www.w3.org/2000/svg", cls := "h-5 w-5", fill := "none",
+                                viewBox := "0 0 24 24", stroke := "currentColor",
+                                path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2",
+                                        d := "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                )),
+                        span(cls := "btm-nav-label", "Warnings"))))
             )
-        )
-    )
+        ))
 
 case class Contents(db: DB, institutionName: String, isDLP: Boolean):
     private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean): String = 
