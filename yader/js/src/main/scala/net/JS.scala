@@ -54,10 +54,10 @@ object JS:
                 .setEvents(AEvent()
                     .setXAxisLabelClick((e, ct, cf) => 
                         val i = cf.asInstanceOf[Dynamic].labelIndex.asInstanceOf[Int]
-                        dialog(s"trends/bodypart/${categories(i)}/$selectedIndex")
+                        dialog(s"trends/bodypart/${categories(i)}/$intervalIndex")
                     ).setMarkerClick((e, context, mobj) =>
                         val i = mobj.asInstanceOf[js.Dynamic].dataPointIndex.asInstanceOf[Int]
-                        dialog(s"bodypart/${categories(i)}/$selectedIndex")
+                        dialog(s"bodypart/${categories(i)}/$intervalIndex")
                     )))
             .setNoData(ApexNoData().setText("No Data To Display").setStyle(FontFamilyFontSize().setFontSize("20")))
             .setXaxis(ApexXAxis().setType(apexchartsStrings.category))
@@ -99,29 +99,50 @@ object JS:
         val dbchart = ApexCharts.getChartByID(doseBoxChartId)
         dbchart.foreach(c =>
             c.updateSeries(data)
-            c.asInstanceOf[js.Dynamic]._windowResize()
+            c.asInstanceOf[js.Dynamic]._windowResize()  // force redraw using private method
         )
 
     @JSExport 
     def updateCharts() = 
-        val uriString = s"/api/graphdata/$selectedIndex"
+        val uriString = s"/api/graphdata/$intervalIndex"
         setAjaxHandler(updateChartsCB)
         xhttp.open("GET", uriString, true)
         xhttp.send()
 
     private def truncate[A](d: Double, a: A) = String.format("%.1f", d)
 
+    private var tabIndex = 0
+    private val activeTab = "bg-white"
+    private val inactiveTab = "bg-gray-400"
+    @JSExport
+    def tabClick(index: Int) = 
+        if index != tabIndex then
+            htmx.removeClass(htmx.find(s"#jtab$index"), inactiveTab)
+            htmx.addClass(htmx.find(s"#jtab$index"), activeTab)
+            htmx.removeClass(htmx.find(s"#jtab$tabIndex"), activeTab)
+            htmx.addClass(htmx.find(s"#jtab$tabIndex"), inactiveTab)
+            tabIndex match 
+                case 0 => 
+                    destropyGraphs(Seq(doseBoxChartId, categoriesPieChartId, trendChartId))
+                case _ =>
+            tabIndex = index
+            htmx.ajax("GET", s"/c/tab/$index", "#contents")
+
+    private def destropyGraphs(chartIds: Seq[String]) = 
+        chartIds.foreach(id => ApexCharts.exec(id, "destroy"))
+
     // current index of selected interval
-    private var selectedIndex = 0
+    // should be stored in browser not server, because multiple user connection needs separate session in server
+    private var intervalIndex = 0
 
     @JSExport
     def intBtnClick(index: Int) = 
-        if index != selectedIndex then
+        if index != intervalIndex then
             htmx.addClass(htmx.find(s"#ibtn$index"), "btn-active")
-            htmx.removeClass(htmx.find(s"#ibtn$selectedIndex"), "btn-active")
-            selectedIndex = index
+            htmx.removeClass(htmx.find(s"#ibtn$intervalIndex"), "btn-active")
+            intervalIndex = index
             updateCharts()
-
+            
     @JSExport
     // get url's content and paste into #modalMark
     def dialog(suburl: String) = 

@@ -4,8 +4,8 @@ import cats.effect.*
 import org.http4s.* 
 import org.http4s.dsl.io.*
 import scalatags.Text.all.*
-import scalatags.Text.svgTags.{svg, path}
-import scalatags.Text.svgAttrs.{d, fill, viewBox, stroke, strokeLinecap, strokeLinejoin, strokeWidth}
+// import scalatags.Text.svgTags.{svg, path}
+// import scalatags.Text.svgAttrs.{d, fill, viewBox, stroke, strokeLinecap, strokeLinejoin, strokeWidth}
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import net.maryknollrad.ctdose.DB
@@ -29,27 +29,13 @@ object Contents:
             div(id := "page", cls := "flex flex-col p-5 space-y-2 min-h-screen",
                 div(replace("/c/header"), "Header"),
                 div(replace("/c/notifications"), "Notifications"),
-                div(id := "contents", 
-                    div(replace("/c/graphs"), "Graphs"),
-                    div(id := "modalMark"))
-                )
+                div(replace("/c/jobs"), "Jobs"),
+                div(id := "contents", div(replace("/c/graphs"), "Graphs")),
+                div(id := "modalMark"))
             )
         )
 
 case class Contents(db: DB, institutionName: String, isDLP: Boolean):
-    private def drawer() = 
-      div(cls := "drawer", 
-        input(id := "menu-drawer", `type` :="checkbox", cls := "drawer-toggle"),
-        div(cls := "drawer-content",
-            label(`for` := "menu-drawer", cls := "btn btn-square btn-ghost drawer-button", 
-                svg(xmlns := "http://www.w3.org/2000/svg", fill := "none", viewBox := "0 0 24 24", cls := "inline-block w-8 h-8 stroke-current",
-                    path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2", d := "M4 6h16M4 12h16M4 18h16")))),
-        div(cls := "drawer-side",
-            label(`for` := "menu-drawer", aria.label := "close sidebar", cls := "drawer-overlay"),
-            ul(cls := "menu p-4 w-80 min-h-full bg-base-200 text-base-content",
-                li(a("Home")),
-                li(a("Edit CT exams")))))
-            
     private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean): String = 
         val doseUnit = if isDLP then "mGy.cm" else "mGy"
         // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
@@ -58,10 +44,6 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
             div(cls := "grow text-xl text-right mr-2", 
                 div(s"Total $count CT exams, ${dosesum.round} ${doseUnit} since ${sdate}"),
                 div(institutionName)),
-            // drawer()
-            // button(cls :="btn btn-square btn-ghost",
-            //     svg(xmlns := "http://www.w3.org/2000/svg", fill := "none", viewBox := "0 0 24 24", cls := "inline-block w-8 h-8 stroke-current",
-            //         path(strokeLinecap := "round", strokeLinejoin := "round", strokeWidth := "2", d := "M4 6h16M4 12h16M4 18h16")))
         ).toString
 
     private def notifications(ls: Seq[(Int, String)]): String = 
@@ -78,21 +60,29 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
                     ls.map((lt, tcontent) => div(cls := classMap.getOrElse(lt, "text-primary-content"), tcontent))
                 )).toString
 
+    private def jobs(selected: Int = 0) = 
+        div(id := "jobs", cls := "flex flex-row",
+            Seq("Boxplot", "DRL", "DRL Edit").zipWithIndex.map((lbl, i) =>
+                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then "bg-white" else "bg-gray-400")
+                // div(id := s"tab$i", cls := c, onclick := s"console.log('$lbl');", lbl)
+                div(id := s"jtab$i", cls := c, /* data.hx.get := s"/c/tab/$i", data.hx.target := "#contents", */ onclick := s"JS.tabClick($i);", lbl)
+            )).toString
+
     private val intervals = Seq("Day", "Week", "Month", "Year")
     private def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
             div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
             div(id := "intBtns", cls := "join",
                 intervals.zipWithIndex.map((interval, i) => 
-                    val c = "btn btn-outline" ++ (if i == selected then " btn-active" else "")
+                    val c = "btn btn-outline btn-ghost" ++ (if i == selected then " btn-active" else "")
                     button(id := s"ibtn$i", cls := c, onclick := s"JS.intBtnClick($i)", interval))
             )
         )
 
     private def graphs() = 
         // div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-slate-900 p-5",
-        div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-primary p-5 space-y-10",
-            intervalButtons(),
+        div(id := "graphs", cls := "flex flex-col items-center bg-primary p-5 space-y-10 rounded-r-md rounded-bl-md",
+            intervalButtons(), 
             div(id := "grdose", cls := "w-4/5"),
             div(id := "grbparts", cls := "w-2/5"),
             script("JS.setupGraphs('grdose', 'grbparts')")
@@ -152,8 +142,18 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
             db.getLastLogs(ltypes = Seq(Info, Warn, Error)).flatMap(ls => 
                 Ok(notifications(ls)))
 
+        case GET -> Root / "jobs" =>
+            Ok(jobs())
+
         case GET -> Root / "graphs" =>
             Ok(graphs())
+
+        case GET -> Root / "tab" / IntVar(i) =>
+            i match 
+                case 0 =>
+                    Ok(graphs())
+                case _: Int =>
+                    Ok("NOT YET IMPREMENTED")
 
         case GET -> Root / "modal" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
