@@ -130,3 +130,7 @@ trait DB:
             |(SELECT $today as today) as t 
             |WHERE $studydate BETWEEN (t.today - $from) AND (t.today - $to) $subFragged""".stripMargin
         qSql.query[Partitioned].to[List].transact(xa)
+
+    def getStudies() = 
+        sql"SELECT distinct studydescription, bodypart FROM studies ORDER BY studydescription"
+            .query[(String, String)].to[List].transact(xa)

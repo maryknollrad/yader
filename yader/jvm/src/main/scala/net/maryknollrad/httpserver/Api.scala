@@ -63,4 +63,7 @@ case class Api(db: DB):
                 db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
                     Ok(write(Data.toBoxedMap(ps, _.dateNumber)))
                 )).getOrElse(NotFound())
+
+        case GET -> Root / "ctstudies" =>
+            db.getStudies().flatMap(ss => Ok(write(ss)))
     }

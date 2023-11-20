@@ -12,7 +12,7 @@ import net.maryknollrad.ctdose.DB
 import net.maryknollrad.ctdose.DB.Partitioned
 
 object Contents:
-    private def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
+    def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
 
     val index = "<!DOCTYPE html>" + html(
         data.theme := "luxury",
@@ -63,9 +63,8 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
     private def jobs(selected: Int = 0) = 
         div(id := "jobs", cls := "flex flex-row",
             Seq("Boxplot", "DRL", "DRL Edit").zipWithIndex.map((lbl, i) =>
-                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then "bg-white" else "bg-gray-400")
-                // div(id := s"tab$i", cls := c, onclick := s"console.log('$lbl');", lbl)
-                div(id := s"jtab$i", cls := c, /* data.hx.get := s"/c/tab/$i", data.hx.target := "#contents", */ onclick := s"JS.tabClick($i);", lbl)
+                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then "bg-white" else "bg-gray-600")
+                div(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i);", lbl)
             )).toString
 
     private val intervals = Seq("Day", "Week", "Month", "Year")
@@ -145,15 +144,18 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
         case GET -> Root / "jobs" =>
             Ok(jobs())
 
-        case GET -> Root / "graphs" =>
-            Ok(graphs())
-
         case GET -> Root / "tab" / IntVar(i) =>
             i match 
                 case 0 =>
                     Ok(graphs())
+                case 2 =>
+                    Ok(CTDRL.editCT(db))
                 case _: Int =>
                     Ok("NOT YET IMPREMENTED")
+
+        // graph job related paths
+        case GET -> Root / "graphs" =>
+            Ok(graphs())
 
         case GET -> Root / "modal" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
@@ -168,4 +170,6 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
         case GET -> Root / "modal" / "trends" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
             Ok(modal(trendBoxes(partition, partitionValue, intervals(i).toLowerCase())).toString)
+
+        // DRL edit related paths
     }

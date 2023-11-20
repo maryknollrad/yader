@@ -113,23 +113,25 @@ object JS:
 
     private var tabIndex = 0
     private val activeTab = "bg-white"
-    private val inactiveTab = "bg-gray-400"
+    private val inactiveTab = "bg-gray-600"
+
     @JSExport
     def tabClick(index: Int) = 
         if index != tabIndex then
+            resetTab()
             htmx.removeClass(htmx.find(s"#jtab$index"), inactiveTab)
             htmx.addClass(htmx.find(s"#jtab$index"), activeTab)
             htmx.removeClass(htmx.find(s"#jtab$tabIndex"), activeTab)
             htmx.addClass(htmx.find(s"#jtab$tabIndex"), inactiveTab)
-            tabIndex match 
-                case 0 => 
-                    destropyGraphs(Seq(doseBoxChartId, categoriesPieChartId, trendChartId))
-                case _ =>
             tabIndex = index
             htmx.ajax("GET", s"/c/tab/$index", "#contents")
 
-    private def destropyGraphs(chartIds: Seq[String]) = 
-        chartIds.foreach(id => ApexCharts.exec(id, "destroy"))
+    private def resetTab() = 
+        tabIndex match 
+            case 0 =>   // boxplot
+                intervalIndex = 0
+                Seq(doseBoxChartId, categoriesPieChartId).foreach(id => ApexCharts.exec(id, "destroy"))
+            case _ =>
 
     // current index of selected interval
     // should be stored in browser not server, because multiple user connection needs separate session in server
@@ -191,3 +193,20 @@ object JS:
 
         chart.updateSeries(data)
         chart.asInstanceOf[js.Dynamic]._windowResize()
+
+    /*
+    @JSExport
+    def editStudies() = 
+        setAjaxHandler(editStudiesCB())
+        xhttp.open("GET", s"/api/ctstudies", true)
+        xhttp.send()
+
+    type CTStudiesReturn = js.Array[js.Tuple2[String, String]]
+    private def editStudiesCB()(e: Event) = 
+        val r = JSON.parse(xhttp.responseText)
+        val cts = r.asInstanceOf[CTStudiesReturn].toArray
+
+        println(cts.length)
+        println(cts(0)._2)
+        println(r.at(0))
+    */
