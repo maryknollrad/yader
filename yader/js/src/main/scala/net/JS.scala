@@ -14,6 +14,9 @@ import typings.apexcharts.ApexCharts.ApexOptions
 import typings.apexcharts.anon.*
 import org.scalajs.dom.HTMLElement
 import org.scalajs.dom.HTMLDialogElement
+import org.scalajs.dom.HTMLSelectElement
+import scala.scalajs.js.URIUtils
+import typings.std.stdStrings.window
 
 @JSExportTopLevel("JS")
 object JS:
@@ -112,8 +115,8 @@ object JS:
     private def truncate[A](d: Double, a: A) = String.format("%.1f", d)
 
     private var tabIndex = 0
-    private val activeTab = "bg-white"
-    private val inactiveTab = "bg-gray-600"
+    private val activeTab = "bg-base-100"
+    private val inactiveTab = "bg-base-300"
 
     @JSExport
     def tabClick(index: Int) = 
@@ -194,19 +197,31 @@ object JS:
         chart.updateSeries(data)
         chart.asInstanceOf[js.Dynamic]._windowResize()
 
-    /*
+    private def markElement(e: HTMLElement) = 
+        htmx.removeClass(e, "mark")
+        e.offsetWidth;
+        htmx.addClass(e, "mark")
+
+    private val drlr = raw"drl_(\d{1,2})_(\d{1,2})".r
+    private val categorySelectId = "catSelect"
     @JSExport
-    def editStudies() = 
-        setAjaxHandler(editStudiesCB())
-        xhttp.open("GET", s"/api/ctstudies", true)
-        xhttp.send()
+    // call back of selection changed
+    def editDRLChanged(selectId: String) = 
+        val select = document.getElementById(selectId).asInstanceOf[HTMLSelectElement]
+        // println(s"$selectId(${select.selectedIndex}) => ${select.options(select.selectedIndex).label}")
+        selectId match
+            case `categorySelectId` =>
+                htmx.ajax("GET", s"/c/tab/2?catid=${select.selectedIndex}", "#contents")
+            case drlr(cid, sid) =>
+                val dlabel = URIUtils.encodeURIComponent(select.options(select.selectedIndex).label)
+                setAjaxHandler(drlChangeCB(select))
+                xhttp.open("GET", s"/api/setdrl/$cid/$sid/$dlabel", true)
+                xhttp.send()
 
-    type CTStudiesReturn = js.Array[js.Tuple2[String, String]]
-    private def editStudiesCB()(e: Event) = 
-        val r = JSON.parse(xhttp.responseText)
-        val cts = r.asInstanceOf[CTStudiesReturn].toArray
-
-        println(cts.length)
-        println(cts(0)._2)
-        println(r.at(0))
-    */
+    private def drlChangeCB(select: HTMLSelectElement)(e: Event) = 
+        // val r = JSON.parse(xhttp.responseText)
+        xhttp.responseText match
+            case "success" =>
+                markElement(select)
+            case errMsg =>
+                dom.window.alert(s"FAILED TO STORE, PLEASE TRY AGAIN\n$errMsg")

@@ -18,12 +18,16 @@ case class SQLite() extends DB:
         "org.sqlite.JDBC", "jdbc:sqlite:ctdose.db", None
     )
 
-    val datetimeType = "DATETIME"
-    val now: String = "datetime('now', 'localtime')"
+    def datetimeType: String = "DATETIME"
+    def now: String = "datetime('now', 'localtime')"
     val minStudyDateAsString: String = "min(studydate)"
+    def serial: String = "INTEGER PRIMARY KEY"
 
     def intervals(value: String): Seq[Fragment] = 
         Seq("j", "W", "m", "Y").map(t => Fragment.const(s"cast(strftime('%$t', $value) as integer)"))
+
+    def getNow() = 
+        sql"SELECT datetime('now', 'localtime')".query[String].unique.transact(xa)
 
     /*
     // TODO: 연달아 대문자면 오류!

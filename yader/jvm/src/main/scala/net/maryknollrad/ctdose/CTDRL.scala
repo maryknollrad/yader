@@ -29,3 +29,4 @@ object CTDRL:
                 )
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")
+        // logger.info("Processing date : {}", d)

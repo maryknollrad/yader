@@ -41,18 +41,21 @@ trait DB:
     import DB.* 
 
     val xa: Transactor.Aux[IO, Unit]
-    val datetimeType: String
-    val now: String
+    def datetimeType: String
+    def now: String
+    def serial: String
     // select min(studydate) as string 
     // sqlite : no need to convert, postgresql : use to_char
-    val minStudyDateAsString: String    
+    val minStudyDateAsString: String   
+    val maxInteger = Integer.MAX_VALUE  // postgresql uses 4 bytes, mysql can store larger number
+
     def intervals(value: String): Seq[Fragment]
     lazy val timeIntervals = intervals(now).zip(intervals("studydate"))
     // assert(timeIntervals.length == QueryInterval.qiSize)
 
     protected val createStudiesSQL = Fragment.const("""CREATE TABLE IF NOT EXISTS studies
         | (acno TEXT NOT NULL, patientid TEXT NOT NULL REFERENCES patients (id),
-        | studydate DATE NOT NULL, studytime TIME NOT NULL, studydescription TEXT NOT NULL, alternative TEXT NOT NULL, 
+        | sid INTEGER REFERENCES ctstudies (sid), studydate DATE NOT NULL, studytime TIME NOT NULL, alternative TEXT NOT NULL, 
         | bodypart TEXT NOT NULL, manufacturer TEXT NOT NULL, modelname TEXT NOT NULL, station TEXT NOT NULL, 
         | operator TEXT NOT NULL, physician TEXT NOT NULL, dosevalue1 REAL NOT NULL DEFAULT 0.0, dosevalue2 REAL NOT NULL DEFAULT 0.0)
         """.stripMargin).update.run
@@ -60,13 +63,31 @@ trait DB:
     protected val createPatientsSQL = Fragment.const("""CREATE TABLE IF NOT EXISTS patients
         | (id TEXT NOT NULL PRIMARY KEY, sex TEXT NOT NULL, birthday DATE NOT NULL)""".stripMargin).update.run
 
+    protected val createCTStudiesSQL = Fragment.const(s"""CREATE TABLE IF NOT EXISTS ctstudies
+        | (sid $serial, studyname TEXT NOT NULL UNIQUE, dummy BOOL NOT NULL DEFAULT false)""".stripMargin).update.run
+
+    protected val createCategoriesSQL = 
+        Fragment.const(s"CREATE TABLE IF NOT EXISTS categories (cid $serial, category TEXT NOT NULL UNIQUE)").update.run
+
+    protected val createDrlsSQL = Fragment.const(s"""CREATE TABLE IF NOT EXISTS drls
+        | (did $serial, cid INTEGER REFERENCES categories (cid), label TEXT NOT NULL, ctdi REAL NOT NULL, dlp REAL NOT NULL,
+        | minage INTEGER NOT NULL DEFAULT 0, maxage INTEGER NOT NULL DEFAULT $maxInteger, dorder INTEGER NOT NULL)""".stripMargin).update.run
+
+    protected val createCTDrlJoinSQL = Fragment.const("""CREATE TABLE IF NOT EXISTS ctdrljoin 
+        | (sid INTEGER REFERENCES ctstudies (sid), cid INTEGER REFERENCES categories (cid), did INTEGER REFERENCES drls (did), UNIQUE (sid, cid, did))""".stripMargin).update.run
+
     protected lazy val createLogsSQL = 
         Fragment.const(s"""CREATE TABLE IF NOT EXISTS logs  
         | (logtime $datetimeType NOT NULL DEFAULT ($now), 
-        | logtype INTEGER NOT NULL DEFAULT 0, content TEXT NOT NULL)""".stripMargin).update.run
+        | logtype INTEGER NOT NULL DEFAULT 0, content TEXT NOT NULL, UNIQUE (logtype, logtime))""".stripMargin).update.run
+
+    protected val createLogsIndexSQL = 
+        fr"CREATE INDEX IF NOT EXISTS logindex ON logs (logtype, logtime)".update.run
 
     def createTablesIfNotExists() = 
-        (createPatientsSQL, createLogsSQL, createStudiesSQL).mapN(_ + _ + _).transact(xa)
+        // (createPatientsSQL, createLogsSQL, createCTStudiesSQL, createStudiesSQL).mapN(_ + _ + _ + _).transact(xa)
+        Seq(createPatientsSQL, createCTStudiesSQL, createLogsSQL, createLogsIndexSQL, createStudiesSQL, createCategoriesSQL, 
+            createDrlsSQL, createCTDrlJoinSQL).reduce(_ *> _).transact(xa) //.zipWithIndex.map(t => IO.println(s"${t._2}") *> t._1.transact(xa)).sequence
 
     def log(msg: String, ltype: DB.LogType) = 
         sql"""INSERT INTO logs (logtype, content) VALUES (${ltype.ordinal}, $msg)""".update.run.transact(xa)
@@ -104,13 +125,17 @@ trait DB:
         q.query[(Int, String)].to[List].transact(xa)
 
     def insertStudyAndPatient(study: Study, patient: Patient) = 
-        val studyInsert = sql"""INSERT INTO studies VALUES 
+        val patientInsert = sql"""INSERT INTO patients VALUES (${patient.id}, ${patient.sex}, ${patient.birthday}) ON CONFLICT DO NOTHING""".update.run
+        val getSid = sql"""INSERT INTO ctstudies (studyname) VALUES (${study.description})
+            | ON CONFLICT (studyname) DO UPDATE SET dummy = true RETURNING sid""".stripMargin.query[Int].unique
+        def studyInsert(sid: Int) = sql"""INSERT INTO studies (acno, patientid, studydate, studytime, sid, alternative, bodypart, 
+            | manufacturer, modelname, station, operator, physician, dosevalue1, dosevalue2) VALUES 
             | (${study.accessionNumber}, ${study.patientId}, ${study.studyDate}, ${study.studyTime},
-            | ${study.description}, ${study.alternative}, ${study.bodypart}, ${study.manufacturer},
+            | ${sid}, ${study.alternative}, ${study.bodypart}, ${study.manufacturer},
             | ${study.model}, ${study.station}, ${study.operator}, ${study.physician},
             | ${study.dose1}, ${study.dose2})""".stripMargin.update.run
-        val patientInsert = sql"""INSERT INTO patients VALUES (${patient.id}, ${patient.sex}, ${patient.birthday}) ON CONFLICT DO NOTHING""".update.run
-        patientInsert.combine(studyInsert).transact(xa)
+        val sinsert = getSid.flatMap(sid => studyInsert(sid))
+        patientInsert.combine(sinsert).transact(xa)
 
     def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
         val (today, studydate) = timeIntervals(interval.ordinal)
@@ -122,15 +147,47 @@ trait DB:
 
     def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
         val pfrag = Fragment.const0(partition.strValue)
-        val (today, studydate) = timeIntervals(interval.ordinal)
+        val (today, studyperiod) = timeIntervals(interval.ordinal)
 
         val subFragged = subpartition.map(p => fr"AND $pfrag = $p").getOrElse(Fragment.empty)
-        val qSql = fr"""SELECT $pfrag, studydate, $studydate as stime, acno, patientid, 
-            |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studydate ORDER BY dosevalue1) FROM studies,
+        val qSql = fr"""SELECT $pfrag, studydate, $studyperiod as stime, acno, patientid, 
+            |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studyperiod ORDER BY dosevalue1) FROM studies,
             |(SELECT $today as today) as t 
-            |WHERE $studydate BETWEEN (t.today - $from) AND (t.today - $to) $subFragged""".stripMargin
+            |WHERE $studyperiod BETWEEN (t.today - $from) AND (t.today - $to) $subFragged""".stripMargin
         qSql.query[Partitioned].to[List].transact(xa)
 
-    def getStudies() = 
-        sql"SELECT distinct studydescription, bodypart FROM studies ORDER BY studydescription"
-            .query[(String, String)].to[List].transact(xa)
+    def getStudies(category: String = "korea"): IO[List[(String, Int, String)]] = 
+        sql"""SELECT studyname, ctstudies.sid, label FROM ctstudies JOIN ctdrljoin ON ctstudies.sid = ctdrljoin.sid  
+        | JOIN drls ON ctdrljoin.did = drls.did JOIN categories ON drls.cid = categories.cid WHERE categories.category = $category ORDER BY ctstudies.sid""".stripMargin
+            .query[(String, Int, String)].to[List].transact(xa)
+
+    def getCategories(): IO[List[(Int, String)]] = 
+        sql"SELECT cid, category FROM categories ORDER BY cid".query[(Int, String)].to[List].transact(xa)
+
+    // cannot use DISTINCT with ORDER BY
+    def getLabels(category: String = "korea"): IO[List[String]] = 
+        sql"""SELECT label, MAX(dorder) FROM drls JOIN categories ON drls.cid = categories.cid 
+        | WHERE categories.category = $category GROUP BY label ORDER BY max(dorder)""".stripMargin
+            .query[(String, Int)].map(_._1).to[List].transact(xa)
+
+    def insertCategory(category: String) = 
+        val insertCategory = sql"INSERT INTO categories (category) VALUES ($category) RETURNING cid".query[Int].unique
+        def insertNoneDrl(cid: Int) = sql"INSERT INTO drls (cid, label, ctdi, dlp, dorder) VALUES ($cid, 'NONE', 0, 0, 0) RETURNING did".query[Int].unique
+        def setDefaultsToNone(cid: Int, did: Int) = sql"INSERT INTO ctdrljoin SELECT sid, $cid, $did FROM ctstudies".update.run
+        val run = for 
+            cid     <-  insertCategory
+            did     <-  insertNoneDrl(cid)
+            count   <-  setDefaultsToNone(cid, did)
+        yield count
+        run.transact(xa)
+
+    def insertDrl(category: String, dorder: Int, label: String, ctdi: Double, dlp: Double, minAge: Int = 0, maxAge: Int = Int.MaxValue) = 
+        sql"""INSERT INTO drls (cid, label, ctdi, dlp, minage, maxage, dorder) 
+        | SELECT cid, $label, $ctdi, $dlp, $minAge, $maxAge, $dorder FROM categories WHERE category = $category""".stripMargin
+            .update.run.transact(xa)
+
+    def updateDrl(cid: Int, sid: Int, dlabel: String) = 
+        sql"""WITH drldid AS
+        | (SELECT did FROM drls WHERE cid = $cid AND label = $dlabel) 
+        | UPDATE ctdrljoin SET did = drldid.did FROM drldid WHERE cid = $cid and sid = $sid""".stripMargin
+            .update.run.transact(xa)

@@ -17,13 +17,16 @@ import CTDoseInfo.*
 import org.dcm4che3.data.ElementDictionary
 import net.maryknollrad.httpserver.HttpServer
 import cats.syntax.all.*
+import net.maryknollrad.ctdose.DRLVals
 
 object Yader extends IOApp:
     def run(as: List[String]): IO[ExitCode] = 
         // "trace", "debug", "info", "warn", "error" or "off"
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "error")
+
         Configuration.loadConfigAndRun({
             case (cdi, cti) => 
                 (CTDoseInfo.run(cdi, cti), HttpServer.server(cdi)).parMapN { (_, _) => () }
-        }) 
+        })
+        // Configuration.loadConfigAndRun({ case (cdi, cti) => DRLVals.initCategories(cdi.db) })        
         *> IO(ExitCode.Success)

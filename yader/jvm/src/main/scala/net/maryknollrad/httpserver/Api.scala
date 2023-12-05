@@ -5,7 +5,6 @@ import org.http4s.*
 import org.http4s.dsl.io.*
 import net.maryknollrad.ctdose.DB
 import net.maryknollrad.ctdose.DB.{QueryInterval, QueryPartition}
-// import net.maryknollrad.ctdose.SQLite
 import doobie.*, doobie.implicits.* 
 import cats.syntax.all.* 
 import upickle.default.{ReadWriter => RW, macroRW, write}
@@ -25,6 +24,7 @@ object Api:
 
 case class Api(db: DB):
     import Api.*
+    import scala.util.{Try, Success, Failure}
     private def bpartsCounts(qi: QueryInterval, from: Int, to: Int) = 
         db.getBodypartCounts(qi, from, to).map(ts =>
             val (cats, counts) = ts.foldLeft((Seq.empty[String], Seq.empty[Long]))({ 
@@ -64,6 +64,15 @@ case class Api(db: DB):
                     Ok(write(Data.toBoxedMap(ps, _.dateNumber)))
                 )).getOrElse(NotFound())
 
-        case GET -> Root / "ctstudies" =>
-            db.getStudies().flatMap(ss => Ok(write(ss)))
+        case GET -> Root / "setdrl" / cidStr / sidStr / dlabel =>
+            cidStr.toIntOption.flatMap(cid => sidStr.toIntOption.map(sid => (cid, sid))) match 
+                case Some((cid, sid)) =>
+                    db.updateDrl(cid.toInt, sid.toInt, dlabel).flatMap(_ match
+                        case 1 => 
+                            Ok("success")
+                        case n =>
+                            Ok(s"Number of updated study is not one : $n")
+                    )
+                case _ =>
+                    Ok("Failed to convert cid/sid string value")
     }

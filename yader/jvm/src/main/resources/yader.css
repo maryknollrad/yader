@@ -445,41 +445,41 @@ html {
 }
 
 :root {
-  color-scheme: dark;
-  --pf: 0 0% 93%;
-  --sf: 218 54% 11%;
-  --af: 319 22% 19%;
-  --nf: 28 100% 3%;
-  --pc: 146 0% 19%;
-  --sc: 227 12% 82%;
-  --ac: 322 9% 84%;
-  --inc: 205 27% 15%;
-  --suc: 88 35% 12%;
-  --wac: 52 28% 14%;
-  --erc: 3 31% 15%;
+  color-scheme: light;
+  --pf: 183 47% 52%;
+  --sf: 338 71% 71%;
+  --af: 39 84% 51%;
+  --nf: 280 46% 7%;
+  --in: 198 93% 60%;
+  --su: 158 64% 52%;
+  --wa: 43 96% 56%;
+  --er: 0 91% 71%;
+  --pc: 183 20% 13%;
+  --sc: 340 15% 16%;
+  --ac: 37 41% 13%;
+  --nc: 283 9% 81%;
+  --inc: 198 100% 12%;
+  --suc: 158 100% 10%;
+  --wac: 43 100% 11%;
+  --erc: 0 100% 14%;
   --rounded-box: 1rem;
-  --rounded-btn: 0.5rem;
   --rounded-badge: 1.9rem;
   --animation-btn: 0.25s;
   --animation-input: .2s;
   --btn-text-case: uppercase;
   --btn-focus-scale: 0.95;
   --border-btn: 1px;
-  --tab-border: 1px;
-  --tab-radius: 0.5rem;
-  --p: 0 0% 100%;
-  --s: 218 54% 18%;
-  --a: 319 22% 26%;
-  --n: 28 100% 10%;
-  --nc: 44 100% 82%;
-  --b1: 240 10% 4%;
-  --b2: 270 4% 9%;
-  --b3: 270 2% 18%;
-  --bc: 37 67% 58%;
-  --in: 202 100% 70%;
-  --su: 89 62% 52%;
-  --wa: 54 69% 64%;
-  --er: 0 100% 72%;
+  --p: 183 47% 59%;
+  --s: 338 71% 78%;
+  --a: 39 84% 58%;
+  --n: 280 46% 14%;
+  --b1: 24 33% 97%;
+  --b2: 27 22% 92%;
+  --b3: 23 14% 89%;
+  --bc: 280 46% 14%;
+  --rounded-btn: 1.9rem;
+  --tab-border: 2px;
+  --tab-radius: .5rem;
 }
 
 *, ::before, ::after {
@@ -675,88 +675,7 @@ html {
   content: var(--tw-content);
 }
 
-.dropdown {
-  position: relative;
-  display: inline-block;
-}
-
-.dropdown > *:focus {
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-}
-
-.dropdown .dropdown-content {
-  position: absolute;
-}
-
-.dropdown:is(:not(details)) .dropdown-content {
-  visibility: hidden;
-  opacity: 0;
-  transform-origin: top;
-  --tw-scale-x: .95;
-  --tw-scale-y: .95;
-  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-backdrop-filter;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
-  transition-duration: 200ms;
-}
-
-.dropdown-end .dropdown-content {
-  right: 0px;
-}
-
-.dropdown-left .dropdown-content {
-  top: 0px;
-  right: 100%;
-  bottom: auto;
-  transform-origin: right;
-}
-
-.dropdown-right .dropdown-content {
-  left: 100%;
-  top: 0px;
-  bottom: auto;
-  transform-origin: left;
-}
-
-.dropdown-bottom .dropdown-content {
-  bottom: auto;
-  top: 100%;
-  transform-origin: top;
-}
-
-.dropdown-top .dropdown-content {
-  bottom: 100%;
-  top: auto;
-  transform-origin: bottom;
-}
-
-.dropdown-end.dropdown-right .dropdown-content {
-  bottom: 0px;
-  top: auto;
-}
-
-.dropdown-end.dropdown-left .dropdown-content {
-  bottom: 0px;
-  top: auto;
-}
-
-.dropdown.dropdown-open .dropdown-content,
-.dropdown:not(.dropdown-hover):focus .dropdown-content,
-.dropdown:focus-within .dropdown-content {
-  visibility: visible;
-  opacity: 1;
-}
-
 @media (hover: hover) {
-  .dropdown.dropdown-hover:hover .dropdown-content {
-    visibility: visible;
-    opacity: 1;
-  }
-
   .btn:hover {
     --tw-border-opacity: 1;
     border-color: hsl(var(--b3) / var(--tw-border-opacity));
@@ -864,22 +783,12 @@ html {
     background-color: hsl(var(--pf) / var(--tw-bg-opacity));
   }
 
-  .dropdown.dropdown-hover:hover .dropdown-content {
-    --tw-scale-x: 1;
-    --tw-scale-y: 1;
-    transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
-  }
-
   .tab[disabled],
     .tab[disabled]:hover {
     cursor: not-allowed;
     color: hsl(var(--bc) / var(--tw-text-opacity));
     --tw-text-opacity: 0.2;
   }
-}
-
-.dropdown:is(details) summary::-webkit-details-marker {
-  display: none;
 }
 
 .label {
@@ -1440,14 +1349,6 @@ html {
   }
 }
 
-.dropdown.dropdown-open .dropdown-content,
-.dropdown:focus .dropdown-content,
-.dropdown:focus-within .dropdown-content {
-  --tw-scale-x: 1;
-  --tw-scale-y: 1;
-  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
-}
-
 .join > :where(*:not(:first-child)) {
   margin-top: 0px;
   margin-bottom: 0px;
@@ -1873,10 +1774,6 @@ html {
   z-index: 1;
 }
 
-.m-1 {
-  margin: 0.25rem;
-}
-
 .-mb-2 {
   margin-bottom: -0.5rem;
 }
@@ -1903,14 +1800,6 @@ html {
 
 .h-40 {
   height: 10rem;
-}
-
-.h-48 {
-  height: 12rem;
-}
-
-.h-12 {
-  height: 3rem;
 }
 
 .min-h-screen {
@@ -2014,9 +1903,9 @@ html {
   border-color: hsl(var(--a) / var(--tw-border-opacity));
 }
 
-.border-primary {
+.border-primary-content {
   --tw-border-opacity: 1;
-  border-color: hsl(var(--p) / var(--tw-border-opacity));
+  border-color: hsl(var(--pc) / var(--tw-border-opacity));
 }
 
 .bg-accent {
@@ -2029,19 +1918,19 @@ html {
   background-color: rgb(253 230 138 / var(--tw-bg-opacity));
 }
 
-.bg-gray-600 {
+.bg-base-100 {
   --tw-bg-opacity: 1;
-  background-color: rgb(75 85 99 / var(--tw-bg-opacity));
+  background-color: hsl(var(--b1) / var(--tw-bg-opacity));
 }
 
-.bg-primary {
+.bg-base-200 {
   --tw-bg-opacity: 1;
-  background-color: hsl(var(--p) / var(--tw-bg-opacity));
+  background-color: hsl(var(--b2) / var(--tw-bg-opacity));
 }
 
-.bg-secondary {
+.bg-base-300 {
   --tw-bg-opacity: 1;
-  background-color: hsl(var(--s) / var(--tw-bg-opacity));
+  background-color: hsl(var(--b3) / var(--tw-bg-opacity));
 }
 
 .bg-slate-900 {
@@ -2049,9 +1938,9 @@ html {
   background-color: rgb(15 23 42 / var(--tw-bg-opacity));
 }
 
-.bg-white {
+.bg-success {
   --tw-bg-opacity: 1;
-  background-color: rgb(255 255 255 / var(--tw-bg-opacity));
+  background-color: hsl(var(--su) / var(--tw-bg-opacity));
 }
 
 .p-1 {
@@ -2168,6 +2057,28 @@ html {
 .text-warning {
   --tw-text-opacity: 1;
   color: hsl(var(--wa) / var(--tw-text-opacity));
+}
+
+.transition-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.mark {
+  animation: mark-with-color 2s;
+}
+
+@keyframes mark-with-color {
+  30% {
+    color: red;
+    background-color: hsl(var(--su));
+  }
+
+  100% {
+    color: black;
+    background-color: hsl(var(--b1));
+  }
 }
 
 .hover\:font-black:hover {

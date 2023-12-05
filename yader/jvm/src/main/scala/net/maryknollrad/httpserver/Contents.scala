@@ -10,12 +10,13 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import net.maryknollrad.ctdose.DB
 import net.maryknollrad.ctdose.DB.Partitioned
+import org.http4s.dsl.impl.OptionalQueryParamMatcher
 
 object Contents:
     def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
 
     val index = "<!DOCTYPE html>" + html(
-        data.theme := "luxury",
+        data.theme := "cupcake",
         head(
             title := "YADER",
             meta(charset := "UTF-8"),
@@ -39,7 +40,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
     private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean): String = 
         val doseUnit = if isDLP then "mGy.cm" else "mGy"
         // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
-        div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary bg-primary", 
+        div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary-content bg-base-300", 
             div(cls := "w-1/4 text-5xl align-middle", dateString),
             div(cls := "grow text-xl text-right mr-2", 
                 div(s"Total $count CT exams, ${dosesum.round} ${doseUnit} since ${sdate}"),
@@ -52,7 +53,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
         if ls.isEmpty then ""
         else
             // div(id := "noti", cls := "relative p-5 rounded-md bg-slate-900 text-emerald-400",
-            div(id := "noti", cls := "relative p-5 rounded-md bg-secondary text-secondary-content h-30",
+            div(id := "noti", cls := "relative p-5 rounded-md border-primary-content bg-base-200 text-secondary-content h-30",
                 // div(id := "notiLabel", cls := "absolute top-0 left-0 bg-amber-200 text-slate-950 text-xl rounded-sm p-1.5",
                 div(id := "notiLabel", cls := "absolute top-0 left-0 bg-accent text-accent-content border-accent text-xl rounded-sm p-1.5",
                     "Notifications"),
@@ -63,7 +64,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
     private def jobs(selected: Int = 0) = 
         div(id := "jobs", cls := "flex flex-row",
             Seq("Boxplot", "DRL", "DRL Edit").zipWithIndex.map((lbl, i) =>
-                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then "bg-white" else "bg-gray-600")
+                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then "bg-base-100" else "bg-base-300")
                 div(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i);", lbl)
             )).toString
 
@@ -79,8 +80,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
         )
 
     private def graphs() = 
-        // div(id := "graphs", cls := "flex flex-col items-center rounded-md bg-slate-900 p-5",
-        div(id := "graphs", cls := "flex flex-col items-center bg-primary p-5 space-y-10 rounded-r-md rounded-bl-md",
+        div(id := "graphs", cls := "flex flex-col items-center bg-base-100 p-5 space-y-10 rounded-r-md rounded-bl-md",
             intervalButtons(), 
             div(id := "grdose", cls := "w-4/5"),
             div(id := "grbparts", cls := "w-2/5"),
@@ -129,6 +129,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
         )
 
     import net.maryknollrad.ctdose.DB.QueryInterval
+    private object OptionalIntQueryParamMatcher extends OptionalQueryParamDecoderMatcher[Int]("catid")
 
     val contentService = HttpRoutes.of[IO] {
         case GET -> Root / "header" =>
@@ -144,12 +145,12 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
         case GET -> Root / "jobs" =>
             Ok(jobs())
 
-        case GET -> Root / "tab" / IntVar(i) =>
+        case GET -> Root / "tab" / IntVar(i) :? OptionalIntQueryParamMatcher(maybeCat) =>
             i match 
                 case 0 =>
                     Ok(graphs())
                 case 2 =>
-                    Ok(CTDRL.editCT(db))
+                    Ok(CTDRL.editCT(db, maybeCat.getOrElse(0)))
                 case _: Int =>
                     Ok("NOT YET IMPREMENTED")
 
