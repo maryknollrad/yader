@@ -1,9 +1,10 @@
 val sharedSettings = Seq(
     scalaVersion := "3.3.1",
+    // version := "0.9.0",
     organization := "net.maryknollrad"
 )
 
-val dcm4cheVersion = "5.31.0"
+val dcm4cheVersion = "5.31.1"
 val catsEffectVersion = "3.5.1"
 val http4sVersion = "0.23.23"
 val doobieVersion = "1.0.0-RC4"
@@ -26,11 +27,11 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
             "org.dcm4che" % "dcm4che-imageio" % dcm4cheVersion,
 
             "org.ekrich" %% "sconfig" % "1.5.1",
-            "net.sourceforge.tess4j" % "tess4j" % "5.8.0",
+            "net.sourceforge.tess4j" % "tess4j" % "5.9.0",
             "org.slf4j" % "slf4j-simple" % "2.0.7",
             "org.tpolecat" %% "doobie-core" % doobieVersion,
             "org.tpolecat" %% "doobie-postgres"  % doobieVersion,
-            "org.xerial" % "sqlite-jdbc" % "3.42.0.0",
+            "org.xerial" % "sqlite-jdbc" % "3.44.1.0",
             "eu.timepit" %% "fs2-cron-calev" % "0.8.3",
 
             "org.http4s" %% "http4s-dsl" % http4sVersion,

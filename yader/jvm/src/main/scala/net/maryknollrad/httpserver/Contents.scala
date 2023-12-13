@@ -68,7 +68,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
                 div(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i);", lbl)
             )).toString
 
-    private val intervals = Seq("Day", "Week", "Month", "Year")
+    private val intervals = Seq("1 Day", "7 Days", "30 Days", "This Year")
     private def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
             div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
@@ -149,10 +149,12 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
             i match 
                 case 0 =>
                     Ok(graphs())
+                case 1 =>
+                    Ok(CTDRL.showStat(this))
                 case 2 =>
                     Ok(CTDRL.editCT(db, maybeCat.getOrElse(0)))
                 case _: Int =>
-                    Ok("NOT YET IMPREMENTED")
+                    NotFound()
 
         // graph job related paths
         case GET -> Root / "graphs" =>

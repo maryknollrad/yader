@@ -11,15 +11,16 @@ object DB:
     case class Patient(id: String, sex: String, birthday: LocalDate)
 
     enum QueryInterval(val strValue: String):
-        case Day extends QueryInterval("day")
-        case Week extends QueryInterval("week")
-        case Month extends QueryInterval("month")
-        case Year extends QueryInterval("year")
+        case Day extends QueryInterval("1 day")
+        case Week extends QueryInterval("7 days")
+        case Month extends QueryInterval("30 days")
+        case Year extends QueryInterval("this year")
         
     object QueryInterval:
         val qiSize = QueryInterval.values.length
-        def defaultRange(qi: QueryInterval) = if qi == QueryInterval.Day then (1, 0) else (0, 0)
-
+        // def defaultRange(qi: QueryInterval) = if qi == QueryInterval.Day then (1, 0) else (0, 0)
+        def defaultRange(qi: QueryInterval) = (1, 0)
+        
     enum QueryPartition(val strValue: String):
         case Bodypart extends QueryPartition("bodypart")
         // case Operator extends QueryPartition("operator")
@@ -44,14 +45,20 @@ trait DB:
     def datetimeType: String
     def now: String
     def serial: String
+    def age(f1: String, f2: String): String    // calculate age
+    def daysbeforetoday(n: Int): String
+
     // select min(studydate) as string 
     // sqlite : no need to convert, postgresql : use to_char
     val minStudyDateAsString: String   
     val maxInteger = Integer.MAX_VALUE  // postgresql uses 4 bytes, mysql can store larger number
 
-    def intervals(value: String): Seq[Fragment]
-    lazy val timeIntervals = intervals(now).zip(intervals("studydate"))
-    // assert(timeIntervals.length == QueryInterval.qiSize)
+    // extract subfield from timestamp or date field, functions depends on DB
+    def subtime(value: String): Seq[Fragment]
+
+    // sql fragments, according to QueryIntervals
+    lazy val timeIntervals = subtime(now).zip(subtime("studydate"))
+    assert(timeIntervals.length == QueryInterval.qiSize)
 
     protected val createStudiesSQL = Fragment.const("""CREATE TABLE IF NOT EXISTS studies
         | (acno TEXT NOT NULL, patientid TEXT NOT NULL REFERENCES patients (id),
@@ -59,6 +66,9 @@ trait DB:
         | bodypart TEXT NOT NULL, manufacturer TEXT NOT NULL, modelname TEXT NOT NULL, station TEXT NOT NULL, 
         | operator TEXT NOT NULL, physician TEXT NOT NULL, dosevalue1 REAL NOT NULL DEFAULT 0.0, dosevalue2 REAL NOT NULL DEFAULT 0.0)
         """.stripMargin).update.run
+
+    protected val createStudiesStudydateIndexSQL = 
+        fr"CREATE INDEX IF NOT EXISTS studyindex ON studies (studydate)".update.run
 
     protected val createPatientsSQL = Fragment.const("""CREATE TABLE IF NOT EXISTS patients
         | (id TEXT NOT NULL PRIMARY KEY, sex TEXT NOT NULL, birthday DATE NOT NULL)""".stripMargin).update.run
@@ -86,8 +96,9 @@ trait DB:
 
     def createTablesIfNotExists() = 
         // (createPatientsSQL, createLogsSQL, createCTStudiesSQL, createStudiesSQL).mapN(_ + _ + _ + _).transact(xa)
-        Seq(createPatientsSQL, createCTStudiesSQL, createLogsSQL, createLogsIndexSQL, createStudiesSQL, createCategoriesSQL, 
-            createDrlsSQL, createCTDrlJoinSQL).reduce(_ *> _).transact(xa) //.zipWithIndex.map(t => IO.println(s"${t._2}") *> t._1.transact(xa)).sequence
+        Seq(createPatientsSQL, createCTStudiesSQL, createLogsSQL, createLogsIndexSQL, createStudiesSQL, createStudiesStudydateIndexSQL, 
+            createCategoriesSQL, createDrlsSQL, createCTDrlJoinSQL).reduce(_ *> _).transact(xa)
+            //.zipWithIndex.map(t => IO.println(s"${t._2}") *> t._1.transact(xa)).sequence
 
     def log(msg: String, ltype: DB.LogType) = 
         sql"""INSERT INTO logs (logtype, content) VALUES (${ltype.ordinal}, $msg)""".update.run.transact(xa)
@@ -137,24 +148,46 @@ trait DB:
         val sinsert = getSid.flatMap(sid => studyInsert(sid))
         patientInsert.combine(sinsert).transact(xa)
 
+    private def timecondition(interval: QueryInterval, from: Int, to: Int): Fragment = 
+        val unit = interval match
+            case QueryInterval.Day => 1
+            case QueryInterval.Week => 7
+            case QueryInterval.Month => 30
+            case QueryInterval.Year => 365
+        val (d1, d2) = (Fragment.const(daysbeforetoday(unit * from)), Fragment.const(daysbeforetoday(unit * to)))
+
+        fr"studydate BETWEEN $d1 AND $d2".tap(println)
+
     def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
-        val (today, studydate) = timeIntervals(interval.ordinal)
-        val sql = fr"""SELECT bodypart, count(*) as bcount 
+        // two sql fragments that extracts subfields of time
+        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        /*
+        sql"""SELECT bodypart, count(*) as bcount 
         |FROM studies, (SELECT $today as today) as t 
-        |WHERE $studydate BETWEEN (t.today - $from) AND (t.today - $to) AND bodypart NOT LIKE '*%' 
+        |WHERE $studyperiod BETWEEN (t.today - $from) AND (t.today - $to) AND bodypart NOT LIKE '*%' 
         |GROUP BY bodypart ORDER BY bcount DESC""".stripMargin
-        sql.query[(String, Long)].to[List].transact(xa)
+        */
+        sql"""SELECT bodypart, count(*) as bcount 
+        |FROM studies
+        |WHERE ${timecondition(interval, from, to)} AND bodypart NOT LIKE '*%' 
+        |GROUP BY bodypart ORDER BY bcount DESC""".stripMargin
+            .query[(String, Long)].to[List].transact(xa)
 
     def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
         val pfrag = Fragment.const0(partition.strValue)
         val (today, studyperiod) = timeIntervals(interval.ordinal)
-
         val subFragged = subpartition.map(p => fr"AND $pfrag = $p").getOrElse(Fragment.empty)
-        val qSql = fr"""SELECT $pfrag, studydate, $studyperiod as stime, acno, patientid, 
-            |dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studyperiod ORDER BY dosevalue1) FROM studies,
-            |(SELECT $today as today) as t 
-            |WHERE $studyperiod BETWEEN (t.today - $from) AND (t.today - $to) $subFragged""".stripMargin
-        qSql.query[Partitioned].to[List].transact(xa)
+        /*
+        sql"""SELECT $pfrag, studydate, $studyperiod as stime, acno, patientid, 
+            | dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studyperiod ORDER BY dosevalue1) FROM studies,
+            | (SELECT $today as today) as t 
+            | WHERE $studyperiod BETWEEN (t.today - $from) AND (t.today - $to) $subFragged""".stripMargin
+                .query[Partitioned].to[List].transact(xa)
+        */
+        sql"""SELECT $pfrag, studydate, $studyperiod as stime, acno, patientid, 
+            | dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studyperiod ORDER BY dosevalue1) FROM studies
+            | WHERE ${timecondition(interval, from, to)} $subFragged""".stripMargin
+                .query[Partitioned].to[List].transact(xa)
 
     def getStudies(category: String = "korea"): IO[List[(String, Int, String)]] = 
         sql"""SELECT studyname, ctstudies.sid, label FROM ctstudies JOIN ctdrljoin ON ctstudies.sid = ctdrljoin.sid  
@@ -191,3 +224,69 @@ trait DB:
         | (SELECT did FROM drls WHERE cid = $cid AND label = $dlabel) 
         | UPDATE ctdrljoin SET did = drldid.did FROM drldid WHERE cid = $cid and sid = $sid""".stripMargin
             .update.run.transact(xa)
+
+    protected val patientAgeStr = age("s.studydate", "p.birthday")
+    protected lazy val fromDrljoinFrag = Fragment.const(s"""FROM studies s 
+                                        | JOIN ctdrljoin c ON s.sid = c.sid
+                                        | JOIN patients p ON s.patientid = p.id
+                                        | JOIN drls d1 ON c.did = d1.did 
+                                        | JOIN drls d2 ON d1.label = d2.label 
+                                        |       AND $patientAgeStr >= d2.minage 
+                                        |       AND $patientAgeStr < d2.maxage""".stripMargin)
+
+    def drlSummary(cid: Int, interval: QueryInterval, from: Int = 1, to: Int = 0) = 
+        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        /*
+        sql"""SELECT d2.label, $studyperiod as stime, s.dosevalue1 <= d2.dlp AS doseflag, count(*) $fromDrljoinFrag, 
+            | (SELECT $today AS today) AS t 
+            | WHERE c.cid = $cid AND
+            | $studyperiod BETWEEN (t.today - $from) AND (t.today - $to)
+            | GROUP BY d2.label, $studyperiod, doseflag""".stripMargin
+                .query[(String, String, Boolean, Int)].to[List].transact(xa)
+        */
+        sql"""SELECT d2.label, $studyperiod as stime, s.dosevalue1 <= d2.dlp AS doseflag, count(*) $fromDrljoinFrag
+            | WHERE c.cid = $cid AND
+            | ${timecondition(interval, from, to)}
+            | GROUP BY d2.label, $studyperiod, doseflag""".stripMargin
+                .query[(String, String, Boolean, Int)].to[List].transact(xa)
+
+    def drlFull(cid: Int, interval: QueryInterval, from: Int = 1, to: Int = 0) = 
+        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        val patientAgeFrag = Fragment.const(age("s.studydate", "p.birthday"))
+        /*
+        sql"""SELECT d2.label, s.acno, s.patientid, $studyperiod AS stime, 
+            | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 < d2.dlp AS doseflag, 
+            | rank() OVER (PARTITION BY d2.did ORDER BY s.dosevalue1) $fromDrljoinFrag,
+            | (SELECT $today AS today) AS t 
+            | WHERE c.cid = $cid AND d1.label != 'NONE' AND
+            | $studyperiod BETWEEN (t.today - $from) AND (t.today - $to)""".stripMargin
+                .query[(String, String, String, String, String, Double, Double, Double, Boolean, Int)].to[List].transact(xa)
+        */
+        sql"""SELECT d2.label, s.acno, s.patientid, $studyperiod AS stime, 
+            | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 < d2.dlp AS doseflag, 
+            | rank() OVER (PARTITION BY d2.did ORDER BY s.dosevalue1) $fromDrljoinFrag
+            | WHERE c.cid = $cid AND d1.label != 'NONE' AND
+            | ${timecondition(interval, from, to)}""".stripMargin
+                .query[(String, String, String, String, String, Double, Double, Double, Boolean, Int)].to[List].transact(xa)
+
+    def bodypartCoverage(cid: Int, interval: QueryInterval, from: Int = 1, to: Int = 0) = 
+        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        /*
+        sql"""SELECT s.bodypart, $studyperiod AS stime, d.label != 'NONE' AS coverflag, count(*) 
+            | FROM studies s 
+	        | JOIN ctdrljoin c ON s.sid = c.sid
+        	| JOIN drls d ON c.did = d.did,
+            | (SELECT $today AS today) AS t 
+            | WHERE c.cid = $cid AND
+            | $studyperiod BETWEEN (t.today - $from) AND (t.today - $to)
+            | GROUP BY s.bodypart, stime, coverflag""".stripMargin
+                .query[(String, String, Boolean, Int)].to[List].transact(xa)
+        */
+        sql"""SELECT s.bodypart, $studyperiod AS stime, d.label != 'NONE' AS coverflag, count(*) 
+            | FROM studies s 
+	        | JOIN ctdrljoin c ON s.sid = c.sid
+        	| JOIN drls d ON c.did = d.did
+            | WHERE c.cid = $cid AND
+            | ${timecondition(interval, from, to)}
+            | GROUP BY s.bodypart, stime, coverflag""".stripMargin
+                .query[(String, String, Boolean, Int)].to[List].transact(xa)

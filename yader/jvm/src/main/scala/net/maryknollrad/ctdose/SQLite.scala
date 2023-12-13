@@ -22,13 +22,20 @@ case class SQLite() extends DB:
     def now: String = "datetime('now', 'localtime')"
     val minStudyDateAsString: String = "min(studydate)"
     def serial: String = "INTEGER PRIMARY KEY"
-
-    def intervals(value: String): Seq[Fragment] = 
+    def age(f1: String, f2: String) = s"CAST(SUBSTR(TIMEDIFF($f1, $f2),2,4) as integer)"
+    
+    def subtime(value: String): Seq[Fragment] = 
         Seq("j", "W", "m", "Y").map(t => Fragment.const(s"cast(strftime('%$t', $value) as integer)"))
+
+    def timeconstraint(value: String) = 
+        Seq(1, 7).map(i => fr"date($value, -$i days)")
 
     def getNow() = 
         sql"SELECT datetime('now', 'localtime')".query[String].unique.transact(xa)
-
+    
+    def daysbeforetoday(n: Int): String = 
+        s"date('now', '-$n days')"
+        
     /*
     // TODO: 연달아 대문자면 오류!
     def toLowerCaseFieldName(s: String) = 

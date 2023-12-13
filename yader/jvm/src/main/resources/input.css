@@ -9,10 +9,10 @@
 @keyframes mark-with-color {
     30% { 
         color: red;
-        background-color: hsl(var(--su)); 
+        background-color: oklch(var(--su)); 
     }
     100% { 
         color: black;
-        background-color: hsl(var(--b1));
+        background-color: oklch(var(--b1));
     }
 }
