@@ -11,6 +11,7 @@ import java.time.format.DateTimeFormatter
 import net.maryknollrad.ctdose.DB
 import net.maryknollrad.ctdose.DB.Partitioned
 import org.http4s.dsl.impl.OptionalQueryParamMatcher
+import net.maryknollrad.yader.Constants.*
 
 object Contents:
     def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
@@ -32,7 +33,7 @@ object Contents:
                 div(replace("/c/notifications"), "Notifications"),
                 div(replace("/c/jobs"), "Jobs"),
                 div(id := "contents", div(replace("/c/graphs"), "Graphs")),
-                div(id := "modalMark"))
+                div(id := modalMarkId))
             )
         )
 
@@ -63,17 +64,16 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
 
     private def jobs(selected: Int = 0) = 
         div(id := "jobs", cls := "flex flex-row",
-            Seq("Boxplot", "DRL", "DRL Edit").zipWithIndex.map((lbl, i) =>
-                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then "bg-base-100" else "bg-base-300")
+            Seq("Summary", "DRL", "DRL Edit").zipWithIndex.map((lbl, i) =>
+                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then activeTabColor else inactiveTabColor)
                 div(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i);", lbl)
             )).toString
 
-    private val intervals = Seq("1 Day", "7 Days", "30 Days", "This Year")
     private def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
             div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
             div(id := "intBtns", cls := "join",
-                intervals.zipWithIndex.map((interval, i) => 
+                queryIntervals.zipWithIndex.map((interval, i) => 
                     val c = "btn btn-outline btn-ghost" ++ (if i == selected then " btn-active" else "")
                     button(id := s"ibtn$i", cls := c, onclick := s"JS.intBtnClick($i)", interval))
             )
@@ -124,7 +124,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
     private def trendBoxes[A](partition: String, partitionValue: String, interval: String) = 
         Seq[Frag](
             div(cls := "text-3xl font-semibold", s"Trends - $partitionValue"),
-            div(id := "trendgraph"),
+            div(id := trendGraphId),
             script(s"JS.trendGraph('$partition', '$partitionValue', '$interval')")
         )
 
@@ -162,7 +162,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
 
         case GET -> Root / "modal" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
-            Api.pAndI(partition, intervals(i).toLowerCase())((pt, it) =>
+            Api.pAndI(partition, queryIntervals(i))((pt, it) =>
                 val (from, to) = QueryInterval.defaultRange(it)
                 db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
                     val (p5, outliers) = Data.toBoxData(ps)
@@ -172,7 +172,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
 
         case GET -> Root / "modal" / "trends" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
-            Ok(modal(trendBoxes(partition, partitionValue, intervals(i).toLowerCase())).toString)
+            Ok(modal(trendBoxes(partition, partitionValue, queryIntervals(i))).toString)
 
         // DRL edit related paths
     }

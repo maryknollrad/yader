@@ -10,11 +10,13 @@ object DB:
 
     case class Patient(id: String, sex: String, birthday: LocalDate)
 
+    import net.maryknollrad.yader.Constants.{queryIntervals => qi}
+
     enum QueryInterval(val strValue: String):
-        case Day extends QueryInterval("1 day")
-        case Week extends QueryInterval("7 days")
-        case Month extends QueryInterval("30 days")
-        case Year extends QueryInterval("this year")
+        case Day extends QueryInterval(qi(0))
+        case Week extends QueryInterval(qi(1))
+        case Month extends QueryInterval(qi(2))
+        case Year extends QueryInterval(qi(3))
         
     object QueryInterval:
         val qiSize = QueryInterval.values.length
@@ -155,8 +157,7 @@ trait DB:
             case QueryInterval.Month => 30
             case QueryInterval.Year => 365
         val (d1, d2) = (Fragment.const(daysbeforetoday(unit * from)), Fragment.const(daysbeforetoday(unit * to)))
-
-        fr"studydate BETWEEN $d1 AND $d2".tap(println)
+        fr"studydate BETWEEN $d1 AND $d2"
 
     def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
         // two sql fragments that extracts subfields of time

@@ -17,6 +17,7 @@ import org.scalajs.dom.HTMLDialogElement
 import org.scalajs.dom.HTMLSelectElement
 import scala.scalajs.js.URIUtils
 import typings.std.stdStrings.window
+import net.maryknollrad.yader.Constants.*
 
 @JSExportTopLevel("JS")
 object JS:
@@ -62,7 +63,8 @@ object JS:
                         val i = mobj.asInstanceOf[js.Dynamic].dataPointIndex.asInstanceOf[Int]
                         dialog(s"bodypart/${categories(i)}/$intervalIndex")
                     )))
-            .setNoData(ApexNoData().setText("No Data To Display").setStyle(FontFamilyFontSize().setFontSize("20")))
+            // .setNoData(ApexNoData().setText("No Data To Display").setStyle(FontFamilyFontSize().setFontSize("20")))
+            .setNoData(ApexNoData().setText(graphNoDataMsg).setStyle(FontFamilyFontSize().setFontSize("20")))
             .setXaxis(ApexXAxis().setType(apexchartsStrings.category))
             .setYaxis(ApexYAxis().setLabels(Align().setFormatter(truncate)))
             .setTooltip(ApexTooltip().setTheme("dark").setY(ApexTooltipY().setFormatter(truncate)))
@@ -72,7 +74,8 @@ object JS:
         val pieOpt = ApexOptions()
             .setSeries(js.Array(Data(js.Array())))
             .setLabels(js.Array())
-            .setNoData(ApexNoData().setText("No Data To Display").setStyle(FontFamilyFontSize().setFontSize("20")))
+            // .setNoData(ApexNoData().setText("No Data To Display").setStyle(FontFamilyFontSize().setFontSize("20")))
+            .setNoData(ApexNoData().setText(graphNoDataMsg).setStyle(FontFamilyFontSize().setFontSize("20")))
             .setChart(ApexChart().setId(categoriesPieChartId).setType(apexchartsStrings.pie))
         val pieChart = ApexCharts(pieDiv, pieOpt)
         pieChart.render()
@@ -115,8 +118,8 @@ object JS:
     private def truncate[A](d: Double, a: A) = String.format("%.1f", d)
 
     private var tabIndex = 0
-    private val activeTab = "bg-base-100"
-    private val inactiveTab = "bg-base-300"
+    private val activeTab = activeTabColor
+    private val inactiveTab = inactiveTabColor
 
     @JSExport
     def tabClick(index: Int) = 
@@ -151,7 +154,7 @@ object JS:
     @JSExport
     // get url's content and paste into #modalMark
     def dialog(suburl: String) = 
-        htmx.ajax("GET", s"/c/modal/$suburl", "#modalMark")
+        htmx.ajax("GET", s"/c/modal/$suburl", s"#$modalMarkId")
         
     @JSExport
     // called from contents (script) called from above dialog function
@@ -162,13 +165,13 @@ object JS:
     private val trendChartId = "trendBox"
     @JSExport
     def trendGraph(partition: String, partitionValue: String, intervalValue: String) = 
-        val trendDiv = document.getElementById("trendgraph")
+        val trendDiv = document.getElementById(trendGraphId)
         val trendOpt = ApexOptions()
             .setSeries(js.Array(Data(js.Array())))
             .setChart(ApexChart()
                 .setId(trendChartId).setType(apexchartsStrings.boxPlot)
                 .setToolbar(AutoSelected().setShow(false)))
-            .setNoData(ApexNoData().setText("No Data To Display").setStyle(FontFamilyFontSize().setFontSize("20")))
+            .setNoData(ApexNoData().setText(graphNoDataMsg).setStyle(FontFamilyFontSize().setFontSize("20")))
             .setXaxis(ApexXAxis().setType(apexchartsStrings.category))
             .setYaxis(ApexYAxis().setLabels(Align().setFormatter(truncate)))
             .setTooltip(ApexTooltip().setTheme("dark").setY(ApexTooltipY().setFormatter(truncate)))
