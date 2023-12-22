@@ -37,7 +37,19 @@ object Contents:
             )
         )
 
+    def intervalButtons(selected: Int = 0) = 
+        div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
+            div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
+            div(id := "intBtns", cls := "join",
+                queryIntervals.zipWithIndex.map((interval, i) => 
+                    val c = "btn btn-outline btn-ghost" ++ (if i == selected then " btn-active" else "")
+                    button(id := s"ibtn$i", cls := c, onclick := s"JS.intBtnClick($i)", interval))
+            )
+        )
+
 case class Contents(db: DB, institutionName: String, isDLP: Boolean):
+    import Contents.intervalButtons
+
     private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean): String = 
         val doseUnit = if isDLP then "mGy.cm" else "mGy"
         // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
@@ -64,20 +76,10 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
 
     private def jobs(selected: Int = 0) = 
         div(id := "jobs", cls := "flex flex-row",
-            Seq("Summary", "DRL", "DRL Edit").zipWithIndex.map((lbl, i) =>
+            jobTabs.zipWithIndex.map((lbl, i) =>
                 val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then activeTabColor else inactiveTabColor)
                 div(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i);", lbl)
             )).toString
-
-    private def intervalButtons(selected: Int = 0) = 
-        div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
-            div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
-            div(id := "intBtns", cls := "join",
-                queryIntervals.zipWithIndex.map((interval, i) => 
-                    val c = "btn btn-outline btn-ghost" ++ (if i == selected then " btn-active" else "")
-                    button(id := s"ibtn$i", cls := c, onclick := s"JS.intBtnClick($i)", interval))
-            )
-        )
 
     private def graphs() = 
         div(id := "graphs", cls := "flex flex-col items-center bg-base-100 p-5 space-y-10 rounded-r-md rounded-bl-md",
@@ -150,7 +152,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
                 case 0 =>
                     Ok(graphs())
                 case 1 =>
-                    Ok(CTDRL.showStat(this))
+                    Ok(CTDRL.showStat(db))
                 case 2 =>
                     Ok(CTDRL.editCT(db, maybeCat.getOrElse(0)))
                 case _: Int =>
@@ -173,6 +175,9 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
         case GET -> Root / "modal" / "trends" / partition / partitionValue / IntVar(i) 
                         if i >= 0 && i <= QueryInterval.qiSize =>
             Ok(modal(trendBoxes(partition, partitionValue, queryIntervals(i))).toString)
+
+        case GET -> Root / "drlsummary" / category / IntVar(i) if i >= 0 && i <= QueryInterval.qiSize =>
+            Ok(CTDRL.drlSummary(db, QueryInterval.fromOrdinal(i), category))
 
         // DRL edit related paths
     }

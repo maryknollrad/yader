@@ -10,5 +10,8 @@ object Constants:
 
     val modalMarkId = "modalMark"
     val trendGraphId = "trendgraph"
+    val drlResultId = "drlStatResult"
+    val drlSummaryCategoryId = "drlCategory"
     
-    val queryIntervals = Seq("1 Day", "7 Days", "30 Days", "This Year")
+    val queryIntervals = Seq("1 Day", "7 Days", "Month", "Year")
+    val jobTabs = Seq("Summary", "DRL", "DRL Edit")

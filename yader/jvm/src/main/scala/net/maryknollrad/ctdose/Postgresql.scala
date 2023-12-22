@@ -21,5 +21,20 @@ case class Postgresql(database: String, user: String, password: String) extends 
     def subtime(value: String): Seq[Fragment] = 
         Seq("day", "week", "month", "year").map(t => Fragment.const(s"extract($t from $value)"))
 
-    def daysbeforetoday(n: Int): String = 
+    inline def daysbeforetoday(n: Int): String = 
         s"date_subtract(current_timestamp, '$n days')::date"
+
+    def timeFrags(interval: QueryInterval, from: Int, to: Int): (Fragment, Fragment) =         
+        val (f1str, f2str): Tuple2[String, String] = interval match
+            case QueryInterval.Day => 
+                (daysbeforetoday(from), daysbeforetoday(to))
+            case QueryInterval.Week => 
+                (daysbeforetoday(from * 7), daysbeforetoday(to * 7))
+            case QueryInterval.Month => 
+                (s"date_trunc('month', current_date) - interval '$from months'", 
+                    s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'")
+            case QueryInterval.Year => 
+                (s"date_trunc('year', current_date) - interval '$from years'", 
+                    s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'")
+        (Fragment.const(f1str), Fragment.const(f2str))
+

@@ -121,6 +121,13 @@ object JS:
     private val activeTab = activeTabColor
     private val inactiveTab = inactiveTabColor
 
+    // current index of selected interval
+    // should be stored in browser not server, because multiple user connection needs separate session in server
+    private var intervalIndex = 0
+
+    // currently selected category 
+    // private var categoryName: String = _
+
     @JSExport
     def tabClick(index: Int) = 
         if index != tabIndex then
@@ -133,15 +140,11 @@ object JS:
             htmx.ajax("GET", s"/c/tab/$index", "#contents")
 
     private def resetTab() = 
+        intervalIndex = 0
         tabIndex match 
             case 0 =>   // boxplot
-                intervalIndex = 0
                 Seq(doseBoxChartId, categoriesPieChartId).foreach(id => ApexCharts.exec(id, "destroy"))
             case _ =>
-
-    // current index of selected interval
-    // should be stored in browser not server, because multiple user connection needs separate session in server
-    private var intervalIndex = 0
 
     @JSExport
     def intBtnClick(index: Int) = 
@@ -149,7 +152,10 @@ object JS:
             htmx.addClass(htmx.find(s"#ibtn$index"), "btn-active")
             htmx.removeClass(htmx.find(s"#ibtn$intervalIndex"), "btn-active")
             intervalIndex = index
-            updateCharts()
+            tabIndex match
+                case 0 => updateCharts()
+                case 1 => updateDrlSummary()
+                case _ => 
             
     @JSExport
     // get url's content and paste into #modalMark
@@ -199,7 +205,7 @@ object JS:
 
         chart.updateSeries(data)
         chart.asInstanceOf[js.Dynamic]._windowResize()
-
+        
     private def markElement(e: HTMLElement) = 
         htmx.removeClass(e, "mark")
         e.offsetWidth;
@@ -228,3 +234,9 @@ object JS:
                 markElement(select)
             case errMsg =>
                 dom.window.alert(s"FAILED TO STORE, PLEASE TRY AGAIN\n$errMsg")
+
+    @JSExport
+    def updateDrlSummary() = 
+        val select = document.getElementById(drlSummaryCategoryId).asInstanceOf[HTMLSelectElement]
+        val categoryName = select.options(select.selectedIndex).label
+        htmx.ajax("GET", s"/c/drlsummary/$categoryName/$intervalIndex", s"#$drlResultId")

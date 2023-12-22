@@ -33,9 +33,24 @@ case class SQLite() extends DB:
     def getNow() = 
         sql"SELECT datetime('now', 'localtime')".query[String].unique.transact(xa)
     
-    def daysbeforetoday(n: Int): String = 
+    inline def daysbeforetoday(n: Int): String = 
         s"date('now', '-$n days')"
         
+    def timeFrags(interval: QueryInterval, from: Int, to: Int): (Fragment, Fragment) = 
+        val (f1str, f2str): Tuple2[String, String] = interval match
+            case QueryInterval.Day => 
+                (daysbeforetoday(from), daysbeforetoday(to))
+            case QueryInterval.Week => 
+                (daysbeforetoday(from * 7), daysbeforetoday(to * 7))
+            case QueryInterval.Month => 
+                (s"date('now', 'start of month', '- $from months')", 
+                    s"date('now', 'start of month', '${-to+1} months', '-1 day')")
+            case QueryInterval.Year => 
+                // now 2023-11-15 => (2023-01-01, 2023-11-31)
+                (s"date('now', 'start of year', '- $from years')", 
+                    s"date('now', 'start of month', '${-to+1} months', '-1 day')")
+        (Fragment.const(f1str), Fragment.const(f2str))
+
     /*
     // TODO: 연달아 대문자면 오류!
     def toLowerCaseFieldName(s: String) = 
