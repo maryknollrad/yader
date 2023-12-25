@@ -66,16 +66,16 @@ object CTDRL:
         table(cls := "table", 
             thead(tr(th("Label"), th("Time"), th("less than DRL"), th("Trend"), th("Count"))),
             tbody(
-                s.map({ case (label, time, count, ratio, trend) =>
-                    tr(td(label), td(time), td(f"$ratio%.1f%%"), td(f"$trend%.1f%%"), td(count))
+                s.map({ case (label, time, count, total, ratio, trend) =>
+                    tr(td(label), td(time), td(f"$ratio%.1f%%"), td(f"$trend%.1f%%"), td(s"$count/$total"))
                     })))
 
     private def showBpartCoverage(s: DrlSummary) = 
         table(cls := "table", 
             thead(tr(th("Bodypart"), th("Time"), th("Coverage"), th("Count"))),
             tbody(
-                s.map({ case (label, time, count, ratio, _) =>
-                    tr(td(label), td(time), td(f"$ratio%.1f%%"), td(count))
+                s.map({ case (label, time, count, total, ratio, _) =>
+                    tr(td(label), td(time), td(f"$ratio%.1f%%"), td(s"$count/$total"))
                     })))
 
     def drlSummary(db: DB, interval: QueryInterval, category: String) = 
@@ -96,41 +96,42 @@ object CTDRL:
             ).toString
 
     type DrlResult = List[(String, String, Boolean, Int)]
-    type DrlSummary = List[(String, Int, Int, Double, Double)]
+    type DrlSummary = List[(String, Int, Int, Int, Double, Double)]
 
     // assumes two datasets with different times
     // input : (label, timespan (as string), flag, count) - label & timespan must be grouped and ordered
-    // output : (label, timespan (as integer), count, option(count), ratio, trendratio)
+    // output : (label, timespan (as integer), count, total, ratio, trendratio)
     def summarize(r: DrlResult): DrlSummary = 
-        def h(r: DrlResult, p: Option[(String, Int, Int, Double)], acc: DrlSummary): DrlSummary = 
+        def h(r: DrlResult, p: Option[(String, Int, Int, Int, Double)], acc: DrlSummary): DrlSummary = 
             r match
                 case Nil => 
                     p match 
-                        case Some((plbl, pts, pcount, pratio)) => 
-                            (plbl, pts, pcount, pratio, pratio) :: acc
+                        case Some((plbl, pts, pcount, ptotal, pratio)) => 
+                            (plbl, pts, pcount, ptotal, pratio, pratio) :: acc
                         case None => 
                             acc
                 case (lbl1, ts1, flag1, count1) :: (lbl2, ts2, flag2, count2) :: tail if lbl1 == lbl2 && ts1 == ts2 => 
                     val (tcount, fcount) = if flag1 then (count1, count2) else (count2, count1)
-                    val ratio = ((tcount.toDouble / (tcount + fcount)) * 1000).round / 10.0
+                    val total = tcount + fcount
+                    val ratio = ((tcount.toDouble / total) * 1000).round / 10.0
                     p match 
-                        case Some((plbl, pts, pcount, pratio)) if plbl == lbl1 =>      // different time
-                            h(tail, None, (lbl1, ts1.toInt, tcount, ratio, ratio - pratio) :: acc)
-                        case Some((plbl, pts, pcount, pratio)) =>                      // different label
-                            h(tail, Some(lbl1, ts1.toInt, tcount, ratio), (plbl, pts, pcount, pratio, pratio) :: acc)
+                        case Some((plbl, pts, pcount, ptotal, pratio)) if plbl == lbl1 =>      // different time
+                            h(tail, None, (lbl1, ts1.toInt, tcount, total, ratio, ratio - pratio) :: acc)
+                        case Some((plbl, pts, pcount, ptotal, pratio)) =>                      // different label
+                            h(tail, Some(lbl1, ts1.toInt, tcount, total, ratio), (plbl, pts, pcount, ptotal, pratio, pratio) :: acc)
                         case None =>
-                            h(tail, Some(lbl1, ts1.toInt, tcount, ratio), acc)
+                            h(tail, Some(lbl1, ts1.toInt, tcount, total, ratio), acc)
                 case (lbl, ts, flag, count) :: tail =>
-                    val (ratio, adjCount) = if flag then (100.0, count) else (0.0, 0)
+                    val (ratio, adjCount, total) = if flag then (100.0, count, count) else (0.0, 0, count)
                     val tsi = ts.toInt
                     p match 
-                        case Some((plbl, pts, pcount, pratio)) if plbl == lbl =>      // different time
+                        case Some((plbl, pts, pcount, ptotal, pratio)) if plbl == lbl =>      // different time
                             val rtrend = if pts < tsi then ratio - pratio else pratio - ratio
-                            h(tail, None, (lbl, tsi, adjCount, ratio, rtrend) :: acc)
-                        case Some((plbl, pts, pcount, pratio)) =>                      // different label
-                            h(tail, Some(lbl, tsi, adjCount, ratio), (plbl, pts, pcount, pratio, pratio) :: acc)
+                            h(tail, None, (lbl, tsi, adjCount, total, ratio, rtrend) :: acc)
+                        case Some((plbl, pts, pcount, ptotal, pratio)) =>                      // different label
+                            h(tail, Some(lbl, tsi, adjCount, total, ratio), (plbl, pts, pcount, ptotal, pratio, pratio) :: acc)
                         case None =>
-                            h(tail, Some(lbl, tsi, adjCount, ratio), acc)
+                            h(tail, Some(lbl, tsi, adjCount, total, ratio), acc)
         h(r, None, List.empty).reverse
         
         /*
