@@ -26,8 +26,8 @@ object Yader extends IOApp:
 
         Configuration.loadConfigAndRun({
             case (cdi, cti) => 
-                // (CTDoseInfo.run(cdi, cti), HttpServer.server(cdi)).parMapN { (_, _) => () }
-                HttpServer.server(cdi)
+                (CTDoseInfo.run(cdi, cti), HttpServer.server(cdi)).parMapN { (_, _) => () }
+                // HttpServer.server(cdi)
         })
         // Configuration.loadConfigAndRun({ case (cdi, cti) => DRLVals.initCategories(cdi.db) })        
         *> IO(ExitCode.Success)

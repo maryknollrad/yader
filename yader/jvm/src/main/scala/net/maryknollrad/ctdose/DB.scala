@@ -221,6 +221,7 @@ trait DB:
                                         | JOIN patients p ON s.patientid = p.id
                                         | JOIN drls d1 ON c.did = d1.did 
                                         | JOIN drls d2 ON d1.label = d2.label 
+                                        |       AND d2.cid = c.cid 
                                         |       AND $patientAgeStr >= d2.minage 
                                         |       AND $patientAgeStr < d2.maxage""".stripMargin)
 
@@ -236,7 +237,6 @@ trait DB:
         val (today, studyperiod) = timeIntervals(interval.ordinal)
         val patientAgeFrag = Fragment.const(age("s.studydate", "p.birthday"))
         sql"""SELECT d2.label, s.acno, s.patientid, $studyperiod AS stime, 
-
             | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 < d2.dlp AS doseflag, 
             | rank() OVER (PARTITION BY d2.did ORDER BY s.dosevalue1) $fromDrljoinFrag
             | WHERE c.cid = $cid AND d1.label != 'NONE' AND
