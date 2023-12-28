@@ -1,10 +1,10 @@
 val sharedSettings = Seq(
     scalaVersion := "3.3.1",
-    // version := "0.9.0",
+    version := "0.9.0",
     organization := "net.maryknollrad"
 )
 
-val dcm4cheVersion = "5.31.1"
+val dcm4cheVersion = "5.31.2"
 val catsEffectVersion = "3.5.1"
 val http4sVersion = "0.23.23"
 val doobieVersion = "1.0.0-RC4"
@@ -19,6 +19,7 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
       )
     )
     .jvmSettings(
+        // Compile / run / fork := true,
         resolvers += "SciJava" at "https://maven.scijava.org/content/repositories/public/",
         libraryDependencies ++= Seq(
             "org.typelevel" %% "cats-effect" % catsEffectVersion,
@@ -40,6 +41,10 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
             "com.lihaoyi" %% "scalatags" % "0.12.0",
             "com.lihaoyi" %% "upickle" % "3.1.2",
             "com.lihaoyi" %% "os-lib" % "0.9.1",
+            // "com.lihaoyi" %% "mainargs" % "0.5.4"
+            "org.gnieh" %% "fs2-data-csv" % "1.10.0",
+            "org.gnieh" %% "fs2-data-csv-generic" % "1.10.0",
+            "org.http4s" %% "http4s-fs2-data-csv" % "0.2.0"
         ),
         assembly / mainClass := Some("Yader"),
         assembly / assemblyMergeStrategy := {

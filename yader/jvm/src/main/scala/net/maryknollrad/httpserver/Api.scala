@@ -8,6 +8,7 @@ import net.maryknollrad.ctdose.DB.{QueryInterval, QueryPartition}
 import doobie.*, doobie.implicits.* 
 import cats.syntax.all.* 
 import upickle.default.{ReadWriter => RW, macroRW, write}
+import fs2.{Stream, Pipe}
 
 object Api: 
     def optionInterval(argument: String): Option[QueryInterval] =
@@ -25,6 +26,14 @@ object Api:
 case class Api(db: DB):
     import Api.*
     import scala.util.{Try, Success, Failure}
+    import fs2.data.csv.*
+    import fs2.data.csv.generic.semiauto
+    import org.http4s.headers.*
+    
+    given encoder: CsvRowEncoder[DB.DrlResult, String] = semiauto.deriveCsvRowEncoder
+    given drlEncoder: EntityEncoder[IO, Stream[IO, DB.DrlResult]] =
+        org.http4s.fs2data.csv.csvEncoderForPipe(encodeUsingFirstHeaders(fullRows = true))
+
     private def bpartsCounts(qi: QueryInterval, from: Int, to: Int) = 
         db.getBodypartCounts(qi, from, to).map(ts =>
             val (cats, counts) = ts.foldLeft((Seq.empty[String], Seq.empty[Long]))({ 
@@ -36,6 +45,8 @@ case class Api(db: DB):
     private def doseBox(qi: QueryInterval, from: Int, to: Int) = 
         db.partitionedQuery(QueryPartition.Bodypart, qi, from = from, to = to)
             .map(rs => Data.toBoxedMap(rs))
+
+    private val queryStrings = Seq("day", "week", "month", "year")
 
     val apiService = HttpRoutes.of[IO] {
         case GET -> Root / "echo" / words =>
@@ -75,4 +86,21 @@ case class Api(db: DB):
                     )
                 case _ =>
                     Ok("Failed to convert cid/sid string value")
+
+        case GET -> Root/"drlcsv"/categoryName/IntVar(intervalIndex) =>                
+            import org.typelevel.ci.CIString
+            import java.time.LocalDate
+            import java.time.format.DateTimeFormatter
+            import QueryInterval.*
+
+            val qi = QueryInterval.fromOrdinal(intervalIndex)
+            val fname = s"drlresult_${categoryName}_${queryStrings(intervalIndex)}_${LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)}.css"
+            val (from, to) = qi match 
+                case Day => (1, 1)
+                case Week => (1, 0) 
+                case _ => (0, 0)
+            db.drlFull(categoryName, qi, from, to).flatMap(rs =>
+                Ok(Stream.emits(rs).asInstanceOf[Stream[IO, DB.DrlResult]], 
+                    `Content-Disposition`("attachment", Map(CIString("filename") -> fname)))
+            )
     }

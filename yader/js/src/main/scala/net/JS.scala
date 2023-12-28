@@ -214,7 +214,7 @@ object JS:
     private val drlr = raw"drl_(\d{1,2})_(\d{1,2})".r
     private val categorySelectId = "catSelect"
     @JSExport
-    // call back of selection changed
+    // call back of selection changed, has different names depending on tab 
     def editDRLChanged(selectId: String) = 
         val select = document.getElementById(selectId).asInstanceOf[HTMLSelectElement]
         // println(s"$selectId(${select.selectedIndex}) => ${select.options(select.selectedIndex).label}")
@@ -228,15 +228,22 @@ object JS:
                 xhttp.send()
 
     private def drlChangeCB(select: HTMLSelectElement)(e: Event) = 
-        // val r = JSON.parse(xhttp.responseText)
         xhttp.responseText match
             case "success" =>
                 markElement(select)
             case errMsg =>
                 dom.window.alert(s"FAILED TO STORE, PLEASE TRY AGAIN\n$errMsg")
 
+    private def getSelectedCategory() = 
+        val select = document.getElementById(drlSummaryCategoryId).asInstanceOf[HTMLSelectElement]
+        select.options(select.selectedIndex).label
+    
     @JSExport
     def updateDrlSummary() = 
-        val select = document.getElementById(drlSummaryCategoryId).asInstanceOf[HTMLSelectElement]
-        val categoryName = select.options(select.selectedIndex).label
+        val categoryName = getSelectedCategory()
         htmx.ajax("GET", s"/c/drlsummary/$categoryName/$intervalIndex", s"#$drlResultId")
+
+    @JSExport
+    def getcsv() = 
+        val categoryName = getSelectedCategory()
+        dom.window.open(s"/api/drlcsv/$categoryName/$intervalIndex", "_blank")

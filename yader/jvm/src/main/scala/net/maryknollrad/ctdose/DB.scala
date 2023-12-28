@@ -34,6 +34,8 @@ object DB:
     enum LogType:
         case  LastProcessedDate, Debug, Info, Warn, Error
 
+    case class DrlResult(label: String, acno: String, patientId: String, stime: String, age: Int, dose: Double, ctdi: Double, dlp: Double, isLessThan: Boolean, rank: Int)
+
 trait DB:
     import cats.effect.IO
     import doobie.*
@@ -233,15 +235,17 @@ trait DB:
             | GROUP BY d2.label, $studyperiod, doseflag ORDER BY d2.label, stime""".stripMargin
                 .query[(String, String, Boolean, Int)].to[List].transact(xa)
 
-    def drlFull(cid: Int, interval: QueryInterval, from: Int = 1, to: Int = 0) = 
+    def drlFull(category: String, interval: QueryInterval, from: Int = 1, to: Int = 0, includeNone: Boolean = true) = 
+        val noneFrag = if !includeNone then Fragment.const("AND d1.label != 'NONE' ") else Fragment.empty
         val (today, studyperiod) = timeIntervals(interval.ordinal)
         val patientAgeFrag = Fragment.const(age("s.studydate", "p.birthday"))
         sql"""SELECT d2.label, s.acno, s.patientid, $studyperiod AS stime, 
             | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 < d2.dlp AS doseflag, 
             | rank() OVER (PARTITION BY d2.did ORDER BY s.dosevalue1) $fromDrljoinFrag
-            | WHERE c.cid = $cid AND d1.label != 'NONE' AND
+            | WHERE c.cid = (SELECT cid FROM categories WHERE category = $category) $noneFrag AND
             | ${timecondition(interval, from, to)}""".stripMargin
-                .query[(String, String, String, String, String, Double, Double, Double, Boolean, Int)].to[List].transact(xa)
+                // .query[(String, String, String, String, String, Double, Double, Double, Boolean, Int)].to[List].transact(xa)
+                .query[DrlResult].to[List].transact(xa)
 
     def bodypartCoverage(category: String, interval: QueryInterval, from: Int = 1, to: Int = 0) = 
         val (today, studyperiod) = timeIntervals(interval.ordinal)

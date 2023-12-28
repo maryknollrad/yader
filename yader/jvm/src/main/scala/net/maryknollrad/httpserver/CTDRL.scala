@@ -92,7 +92,8 @@ object CTDRL:
                 div("-" * 80),
                 div(bpartCover.mkString("<BR />")),
                 div("-" * 30),
-                showBpartCoverage(summarize(bpartCover))
+                showBpartCoverage(summarize(bpartCover)),
+                button(onclick := "JS.getcsv();", "download CSV")
             ).toString
 
     type DrlResult = List[(String, String, Boolean, Int)]
