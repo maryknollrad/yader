@@ -36,6 +36,20 @@ object DB:
 
     case class DrlResult(label: String, acno: String, patientId: String, stime: String, age: Int, dose: Double, ctdi: Double, dlp: Double, isLessThan: Boolean, rank: Int)
 
+    private def weekago(dd: LocalDate): LazyList[LocalDate] = dd #:: weekago(dd.minusDays(7))
+    private def weeklater(dd: LocalDate): LazyList[LocalDate] = dd #:: weekago(dd.plusDays(7))
+
+    def getWeekStarts(d: LocalDate): LazyList[LocalDate] = 
+        val prevMonday = d.minusDays(d.getDayOfWeek().getValue() - 1)
+        weekago(prevMonday)
+
+    def getWeekBoundary(from: Int, to: Int) = 
+        val today = LocalDate.now()
+        val twd = today.getDayOfWeek().getValue()
+        val commingSunday = today.plusDays(7 - twd)
+        val prevMonday = today.minusDays(twd - 1)
+        (weekago(prevMonday)(from), weekago(commingSunday)(to))
+
 trait DB:
     import cats.effect.IO
     import doobie.*
@@ -51,14 +65,13 @@ trait DB:
     def serial: String
     def age(f1: String, f2: String): String    // calculate age
     def timeFrags(interval: QueryInterval, from: Int, to: Int): (Fragment, Fragment)
+    // extract subfield from timestamp or date field, functions depends on DB
+    def subtime(value: String): Seq[Fragment]
 
     // select min(studydate) as string 
     // sqlite : no need to convert, postgresql : use to_char
     val minStudyDateAsString: String   
     val maxInteger = Integer.MAX_VALUE  // postgresql uses 4 bytes, mysql can store larger number
-
-    // extract subfield from timestamp or date field, functions depends on DB
-    def subtime(value: String): Seq[Fragment]
 
     // sql fragments, according to QueryIntervals
     lazy val timeIntervals = subtime(now).zip(subtime("studydate"))
@@ -257,3 +270,6 @@ trait DB:
             | ${timecondition(interval, from, to)}
             | GROUP BY s.bodypart, stime, coverflag ORDER BY s.bodypart, stime""".stripMargin
                 .query[(String, String, Boolean, Int)].to[List].transact(xa)
+
+    def todaySubTime(i: QueryInterval) = 
+        sql"""SELECT ${timeIntervals(i.ordinal)._1}""".query[String].unique.transact(xa)

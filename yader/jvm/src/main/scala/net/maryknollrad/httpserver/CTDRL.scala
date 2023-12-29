@@ -79,20 +79,21 @@ object CTDRL:
                     })))
 
     def drlSummary(db: DB, interval: QueryInterval, category: String) = 
-        val (from, to) = if interval == QueryInterval.Day then (2, 1) else (1, 0)
+        val (from, to, adjust) = if interval == QueryInterval.Day then (2, 1, 1) else (1, 0, 0)
         for 
-            drlRatio    <-      db.drlSummary(category, interval, from, to)
-            bpartCover  <-      db.bodypartCoverage(category, interval, from, to)
+            todaysegstr    <-      db.todaySubTime(interval)
+            todaysegment   =       todaysegstr.toInt - adjust
+            drlRatio       <-      db.drlSummary(category, interval, from, to)
+            bpartCover     <-      db.bodypartCoverage(category, interval, from, to)
         yield
             div(
                 div(drlRatio.mkString("<BR />")),
                 div("-" * 30),
-                // summarize(drlRatio).map(showDrlStat),
-                showDrlStats(summarize(drlRatio)),
+                showDrlStats(summarize(drlRatio, Some(todaysegment))),
                 div("-" * 80),
                 div(bpartCover.mkString("<BR />")),
                 div("-" * 30),
-                showBpartCoverage(summarize(bpartCover)),
+                showBpartCoverage(summarize(bpartCover, Some(todaysegment))),
                 button(onclick := "JS.getcsv();", "download CSV")
             ).toString
 
@@ -102,7 +103,7 @@ object CTDRL:
     // assumes two datasets with different times
     // input : (label, timespan (as string), flag, count) - label & timespan must be grouped and ordered
     // output : (label, timespan (as integer), count, total, ratio, trendratio)
-    def summarize(r: DrlResult): DrlSummary = 
+    def summarize(r: DrlResult, timeFilter: Option[Int]): DrlSummary = 
         def h(r: DrlResult, p: Option[(String, Int, Int, Int, Double)], acc: DrlSummary): DrlSummary = 
             r match
                 case Nil => 
@@ -133,19 +134,6 @@ object CTDRL:
                             h(tail, Some(lbl, tsi, adjCount, total, ratio), (plbl, pts, pcount, ptotal, pratio, pratio) :: acc)
                         case None =>
                             h(tail, Some(lbl, tsi, adjCount, total, ratio), acc)
-        h(r, None, List.empty).reverse
-        
-        /*
-        import cats.effect.IO
-
-        for 
-            ws  <- db.drlSummary(catIndex, interval)
-
-            _   <- IO.println(ws.mkString("\n"))
-            _   <- IO.println("-" * 40)
-            cs  <- db.bodypartCoverage(1, Month)
-            _   <- IO.println(cs.mkString("\n"))
-            r   <- db.drlFull(1, Month)
-            // _   <- IO.println(r)
-        yield r.mkString("<BR />")
-        */
+        h(r, None, List.empty)
+            .filter(t6 => timeFilter.map(_ == t6._2).getOrElse(true))
+            .reverse

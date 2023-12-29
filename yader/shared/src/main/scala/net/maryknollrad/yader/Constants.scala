@@ -13,5 +13,5 @@ object Constants:
     val drlResultId = "drlStatResult"
     val drlSummaryCategoryId = "drlCategory"
     
-    val queryIntervals = Seq("1 Day", "7 Days", "Month", "Year")
+    val queryIntervals = Seq("Day", "Week", "Month", "Year")
     val jobTabs = Seq("Summary", "DRL", "DRL Edit")

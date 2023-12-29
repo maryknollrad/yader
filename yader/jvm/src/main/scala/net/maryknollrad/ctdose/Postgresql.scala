@@ -24,17 +24,17 @@ case class Postgresql(database: String, user: String, password: String) extends 
     inline def daysbeforetoday(n: Int): String = 
         s"date_subtract(current_timestamp, '$n days')::date"
 
+    import doobie.postgres.implicits.*
     def timeFrags(interval: QueryInterval, from: Int, to: Int): (Fragment, Fragment) =         
-        val (f1str, f2str): Tuple2[String, String] = interval match
+        interval match
             case QueryInterval.Day => 
-                (daysbeforetoday(from), daysbeforetoday(to))
+                (Fragment.const(daysbeforetoday(from)), Fragment.const(daysbeforetoday(to)))
             case QueryInterval.Week => 
-                (daysbeforetoday(from * 7), daysbeforetoday(to * 7))
+                val (d1, d2) = DB.getWeekBoundary(from, to)
+                (fr"$d1", fr"$d2")
             case QueryInterval.Month => 
-                (s"date_trunc('month', current_date) - interval '$from months'", 
-                    s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'")
+                (Fragment.const(s"date_trunc('month', current_date) - interval '$from months'"), 
+                    Fragment.const(s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'"))
             case QueryInterval.Year => 
-                (s"date_trunc('year', current_date) - interval '$from years'", 
-                    s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'")
-        (Fragment.const(f1str), Fragment.const(f2str))
-
+                (Fragment.const(s"date_trunc('year', current_date) - interval '$from years'"), 
+                    Fragment.const(s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'"))

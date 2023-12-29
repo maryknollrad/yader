@@ -90,14 +90,13 @@ case class Api(db: DB):
         case GET -> Root/"drlcsv"/categoryName/IntVar(intervalIndex) =>                
             import org.typelevel.ci.CIString
             import java.time.LocalDate
-            import java.time.format.DateTimeFormatter
+            import java.time.format.DateTimeFormatter.BASIC_ISO_DATE
             import QueryInterval.*
 
             val qi = QueryInterval.fromOrdinal(intervalIndex)
-            val fname = s"drlresult_${categoryName}_${queryStrings(intervalIndex)}_${LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)}.css"
+            val fname = s"drlresult_${categoryName}_${queryStrings(intervalIndex)}_${LocalDate.now().format(BASIC_ISO_DATE)}.cvs"
             val (from, to) = qi match 
                 case Day => (1, 1)
-                case Week => (1, 0) 
                 case _ => (0, 0)
             db.drlFull(categoryName, qi, from, to).flatMap(rs =>
                 Ok(Stream.emits(rs).asInstanceOf[Stream[IO, DB.DrlResult]], 
