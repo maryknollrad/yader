@@ -230,7 +230,6 @@ trait DB:
             .update.run.transact(xa)
 
     protected val patientAgeStr = age("s.studydate", "p.birthday")
-    // protected lazy val fromDrljoinFrag = Fragment.const(s"""FROM studies s 
     protected val fromDrljoinFrag = Fragment.const(s"""FROM studies s 
                                         | JOIN ctdrljoin c ON s.sid = c.sid
                                         | JOIN patients p ON s.patientid = p.id
@@ -240,20 +239,22 @@ trait DB:
                                         |       AND $patientAgeStr >= d2.minage 
                                         |       AND $patientAgeStr < d2.maxage""".stripMargin)
 
-    def drlSummary(category: String, interval: QueryInterval, from: Int = 1, to: Int = 0) = 
+    def dosefield(table: String, isDLP: Boolean) = Fragment.const(if isDLP then s"${table}.dlp" else s"${table}.ctdi")
+
+    def drlSummary(category: String, interval: QueryInterval, from: Int, to: Int, isDLP: Boolean) = 
         val (today, studyperiod) = timeIntervals(interval.ordinal)
-        sql"""SELECT d2.label, $studyperiod as stime, s.dosevalue1 <= d2.dlp AS doseflag, count(*) $fromDrljoinFrag
+        sql"""SELECT d2.label, $studyperiod as stime, s.dosevalue1 <= ${dosefield("d2", isDLP)} AS doseflag, count(*) $fromDrljoinFrag
             | WHERE c.cid = (SELECT cid FROM categories WHERE category = $category) AND
             | ${timecondition(interval, from, to)}
             | GROUP BY d2.label, $studyperiod, doseflag ORDER BY d2.label, stime""".stripMargin
                 .query[(String, String, Boolean, Int)].to[List].transact(xa)
 
-    def drlFull(category: String, interval: QueryInterval, from: Int = 1, to: Int = 0, includeNone: Boolean = true) = 
+    def drlFull(category: String, interval: QueryInterval, from: Int, to: Int, isDLP: Boolean, includeNone: Boolean = true) = 
         val noneFrag = if !includeNone then Fragment.const("AND d1.label != 'NONE' ") else Fragment.empty
         val (today, studyperiod) = timeIntervals(interval.ordinal)
         val patientAgeFrag = Fragment.const(age("s.studydate", "p.birthday"))
         sql"""SELECT d2.label, s.acno, s.patientid, $studyperiod AS stime, 
-            | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 < d2.dlp AS doseflag, 
+            | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 <= ${dosefield("d2", isDLP)} AS doseflag, 
             | rank() OVER (PARTITION BY d2.did ORDER BY s.dosevalue1) $fromDrljoinFrag
             | WHERE c.cid = (SELECT cid FROM categories WHERE category = $category) $noneFrag AND
             | ${timecondition(interval, from, to)}""".stripMargin

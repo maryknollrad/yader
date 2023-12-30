@@ -8,14 +8,18 @@ import cats.data.*
 import cats.data.Validated.*
 import cats.effect.IO
 import cats.syntax.all.*
-import java.time.LocalDate
+import java.time.{LocalDate, LocalDateTime}
 import CTDoseInfo.*
+import org.http4s.Request
 
 object Configuration:
     case class ConnectionInfo(callingAe: String, calledAe: String, host: String, port: Int, encoding: String) 
     type TesseractPath = String
     case class CTDoseConfig(connectionInfo: ConnectionInfo, db: DB, tpath: TesseractPath, doseDLP: Boolean, institution: List[String], storepng: Option[String], encoding: String,
-        processBegin: Option[LocalDate], processDayBehind: Int, pauseInterval: Int, calendarEvent: Option[String], webPort: Option[Int])
+            processBegin: Option[LocalDate], processDayBehind: Int, pauseInterval: Int, calendarEvent: Option[String], webPort: Option[Int], drlEditIps: List[String], printIp: Boolean):
+        def drlEditable(req: Request[_]): Boolean = 
+            if printIp then println(s"[${LocalDateTime.now()}] Request from '${req.remoteAddr.map(_.toString).getOrElse("No IP address")}'")
+            req.remoteAddr.map(ip => drlEditIps.isEmpty || drlEditIps.contains(ip.toString)).getOrElse(false)
 
     def ctInfo() = 
         val ctConf = Try(ConfigFactory.load("ct-info").getConfig("CTINFO"))
@@ -96,6 +100,7 @@ object Configuration:
                 val pauseInterval = getOptionalInt("pause-interval").getOrElse(0)
                 val calev = getOptionalString("calendar-event")
                 val webport = getOptionalInt("web-port-number")
+                val drlEditIps = c.getStringList("drl-edit-ips").asScala.toList
                 val db: DB = 
                     { for
                         db   <- getOptionalString("postgres-db")
@@ -104,8 +109,9 @@ object Configuration:
                     yield Postgresql(db, user, pass) }.getOrElse(SQLite())
 
                 assert(processDayBehind >= 0 && pauseInterval >= 0)
+                // TODO : add printIp option as command line argument
                 CTDoseConfig(ci, db, tpath, isDLP, institutionNames, storepng, encoding, 
-                    processBegin, processDayBehind, pauseInterval, calev, webport)
+                    processBegin, processDayBehind, pauseInterval, calev, webport, drlEditIps, true)
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")
 

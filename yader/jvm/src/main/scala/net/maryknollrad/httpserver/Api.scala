@@ -4,6 +4,7 @@ import cats.effect.*
 import org.http4s.* 
 import org.http4s.dsl.io.*
 import net.maryknollrad.ctdose.DB
+import net.maryknollrad.ctdose.Configuration.CTDoseConfig
 import net.maryknollrad.ctdose.DB.{QueryInterval, QueryPartition}
 import doobie.*, doobie.implicits.* 
 import cats.syntax.all.* 
@@ -23,7 +24,7 @@ object Api:
             i <- optionInterval(interval)
         yield f(p, i)
 
-case class Api(db: DB):
+case class Api(config: CTDoseConfig):
     import Api.*
     import scala.util.{Try, Success, Failure}
     import fs2.data.csv.*
@@ -35,7 +36,7 @@ case class Api(db: DB):
         org.http4s.fs2data.csv.csvEncoderForPipe(encodeUsingFirstHeaders(fullRows = true))
 
     private def bpartsCounts(qi: QueryInterval, from: Int, to: Int) = 
-        db.getBodypartCounts(qi, from, to).map(ts =>
+        config.db.getBodypartCounts(qi, from, to).map(ts =>
             val (cats, counts) = ts.foldLeft((Seq.empty[String], Seq.empty[Long]))({ 
                 case ((cats, counts), t) => (cats :+ t._1, counts :+ t._2)
             })
@@ -43,7 +44,7 @@ case class Api(db: DB):
         )
 
     private def doseBox(qi: QueryInterval, from: Int, to: Int) = 
-        db.partitionedQuery(QueryPartition.Bodypart, qi, from = from, to = to)
+        config.db.partitionedQuery(QueryPartition.Bodypart, qi, from = from, to = to)
             .map(rs => Data.toBoxedMap(rs))
 
     private val queryStrings = Seq("day", "week", "month", "year")
@@ -71,14 +72,14 @@ case class Api(db: DB):
                     case QueryInterval.Week => (10, 0)
                     case QueryInterval.Month => (12, 0)
                     case QueryInterval.Year => (5, 0)
-                db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
+                config.db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
                     Ok(write(Data.toBoxedMap(ps, _.dateNumber)))
                 )).getOrElse(NotFound())
 
-        case GET -> Root / "setdrl" / cidStr / sidStr / dlabel =>
+        case req @ GET -> Root / "setdrl" / cidStr / sidStr / dlabel if config.drlEditable(req) =>
             cidStr.toIntOption.flatMap(cid => sidStr.toIntOption.map(sid => (cid, sid))) match 
                 case Some((cid, sid)) =>
-                    db.updateDrl(cid.toInt, sid.toInt, dlabel).flatMap(_ match
+                    config.db.updateDrl(cid.toInt, sid.toInt, dlabel).flatMap(_ match
                         case 1 => 
                             Ok("success")
                         case n =>
@@ -94,11 +95,11 @@ case class Api(db: DB):
             import QueryInterval.*
 
             val qi = QueryInterval.fromOrdinal(intervalIndex)
-            val fname = s"drlresult_${categoryName}_${queryStrings(intervalIndex)}_${LocalDate.now().format(BASIC_ISO_DATE)}.cvs"
+            val fname = s"drlresult_${categoryName}_${queryStrings(intervalIndex)}_${LocalDate.now().format(BASIC_ISO_DATE)}.csv"
             val (from, to) = qi match 
                 case Day => (1, 1)
                 case _ => (0, 0)
-            db.drlFull(categoryName, qi, from, to).flatMap(rs =>
+            config.db.drlFull(categoryName, qi, from, to, config.doseDLP).flatMap(rs =>
                 Ok(Stream.emits(rs).asInstanceOf[Stream[IO, DB.DrlResult]], 
                     `Content-Disposition`("attachment", Map(CIString("filename") -> fname)))
             )

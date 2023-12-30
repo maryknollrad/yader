@@ -28,10 +28,13 @@ object HttpServer:
             StaticFile.fromResource(file, Some(request)).getOrElseF(NotFound())
     }
 
+    def drlEditable(config: CTDoseConfig, req: Request[_]): Boolean = 
+        req.remoteAddr.map(ip => config.drlEditIps.isEmpty || config.drlEditIps.contains(ip)).getOrElse(false)
+
     def server(cdi: CTDoseConfig) = 
         val portNum = cdi.webPort.getOrElse(7878)
-        val api = Api(cdi.db)
-        val contents = Contents(cdi.db, cdi.institution.head, cdi.doseDLP)
+        val api = Api(cdi)
+        val contents = Contents(cdi)
         val yaderService = Router("/" -> staticService, "/api" -> api.apiService, "/c" -> contents.contentService)
         /*
         val service = CORS.policy.withAllowOriginHost(Set(

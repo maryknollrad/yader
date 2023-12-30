@@ -78,21 +78,23 @@ object CTDRL:
                     tr(td(label), td(time), td(f"$ratio%.1f%%"), td(s"$count/$total"))
                     })))
 
-    def drlSummary(db: DB, interval: QueryInterval, category: String) = 
+    def drlSummary(db: DB, interval: QueryInterval, category: String, isDLP: Boolean) = 
         val (from, to, adjust) = if interval == QueryInterval.Day then (2, 1, 1) else (1, 0, 0)
         for 
             todaysegstr    <-      db.todaySubTime(interval)
             todaysegment   =       todaysegstr.toInt - adjust
-            drlRatio       <-      db.drlSummary(category, interval, from, to)
+            drlRatio       <-      db.drlSummary(category, interval, from, to, isDLP)
             bpartCover     <-      db.bodypartCoverage(category, interval, from, to)
         yield
             div(
-                div(drlRatio.mkString("<BR />")),
-                div("-" * 30),
+                // div(drlRatio.mkString("<BR />")),
+                // div("-" * 30),
+                div(cls := "text-2xl", "Exams under DRL"),
                 showDrlStats(summarize(drlRatio, Some(todaysegment))),
-                div("-" * 80),
-                div(bpartCover.mkString("<BR />")),
-                div("-" * 30),
+                // div("-" * 80),
+                // div(bpartCover.mkString("<BR />")),
+                // div("-" * 30),
+                div(cls := "text-2xl mt-2", "Bodypart Coverage"),
                 showBpartCoverage(summarize(bpartCover, Some(todaysegment))),
                 button(onclick := "JS.getcsv();", "download CSV")
             ).toString

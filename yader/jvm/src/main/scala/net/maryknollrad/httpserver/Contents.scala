@@ -9,9 +9,11 @@ import scalatags.Text.all.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import net.maryknollrad.ctdose.DB
+import net.maryknollrad.ctdose.Configuration.CTDoseConfig
 import net.maryknollrad.ctdose.DB.Partitioned
 import org.http4s.dsl.impl.OptionalQueryParamMatcher
 import net.maryknollrad.yader.Constants.*
+import net.maryknollrad.ctdose.Configuration.CTDoseConfig
 
 object Contents:
     def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
@@ -47,17 +49,17 @@ object Contents:
             )
         )
 
-case class Contents(db: DB, institutionName: String, isDLP: Boolean):
+case class Contents(config: CTDoseConfig):
     import Contents.intervalButtons
 
-    private def header(dateString: String, count: Int, dosesum: Double, sdate: String, institutionName: String, isDLP: Boolean): String = 
-        val doseUnit = if isDLP then "mGy.cm" else "mGy"
+    private def header(dateString: String, count: Int, dosesum: Double, sdate: String): String = 
+        val doseUnit = if config.doseDLP then "mGy.cm" else "mGy"
         // div(id := "header", cls := "flex flex-row p-5 content-center rounded-md bg-slate-900 text-emerald-400", 
         div(id := "header", cls := "flex flex-row p-5 content-center rounded-md text-primary-content border-primary-content bg-base-300", 
             div(cls := "w-1/4 text-5xl align-middle", dateString),
             div(cls := "grow text-xl text-right mr-2", 
                 div(s"Total $count CT exams, ${dosesum.round} ${doseUnit} since ${sdate}"),
-                div(institutionName)),
+                div(config.institution.head)),
         ).toString
 
     private def notifications(ls: Seq[(Int, String)]): String = 
@@ -74,9 +76,10 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
                     ls.map((lt, tcontent) => div(cls := classMap.getOrElse(lt, "text-primary-content"), tcontent))
                 )).toString
 
-    private def jobs(selected: Int = 0) = 
+    private def jobs(drlEditable: Boolean)(selected: Int = 0) = 
+        val jobsWithIndices = jobTabs.zipWithIndex.take(if drlEditable then 3 else 2)
         div(id := "jobs", cls := "flex flex-row",
-            jobTabs.zipWithIndex.map((lbl, i) =>
+            jobsWithIndices.map((lbl, i) =>
                 val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then activeTabColor else inactiveTabColor)
                 div(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i);", lbl)
             )).toString
@@ -136,25 +139,25 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
     val contentService = HttpRoutes.of[IO] {
         case GET -> Root / "header" =>
             val dateString = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-            db.getCountAndDoseSum().flatMap((count, dosesum, sdate) =>
-                Ok(header(dateString, count, dosesum, sdate, institutionName, isDLP)))
+            config.db.getCountAndDoseSum().flatMap((count, dosesum, sdate) =>
+                Ok(header(dateString, count, dosesum, sdate)))
 
         case GET -> Root / "notifications" =>
             import net.maryknollrad.ctdose.DB.LogType.*
-            db.getLastLogs(ltypes = Seq(Info, Warn, Error)).flatMap(ls => 
+            config.db.getLastLogs(ltypes = Seq(Info, Warn, Error)).flatMap(ls => 
                 Ok(notifications(ls)))
 
-        case GET -> Root / "jobs" =>
-            Ok(jobs())
+        case req @ GET -> Root / "jobs" =>
+            Ok(jobs(config.drlEditable(req))())
 
-        case GET -> Root / "tab" / IntVar(i) :? OptionalIntQueryParamMatcher(maybeCat) =>
+        case req @ GET -> Root / "tab" / IntVar(i) :? OptionalIntQueryParamMatcher(maybeCat) =>
             i match 
                 case 0 =>
                     Ok(graphs())
                 case 1 =>
-                    Ok(CTDRL.showStat(db))
-                case 2 =>
-                    Ok(CTDRL.editCT(db, maybeCat.getOrElse(0)))
+                    Ok(CTDRL.showStat(config.db))
+                case 2 if config.drlEditable(req) =>
+                    Ok(CTDRL.editCT(config.db, maybeCat.getOrElse(0)))
                 case _: Int =>
                     NotFound()
 
@@ -166,7 +169,7 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
                         if i >= 0 && i <= QueryInterval.qiSize =>
             Api.pAndI(partition, queryIntervals(i))((pt, it) =>
                 val (from, to) = QueryInterval.defaultRange(it)
-                db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
+                config.db.partitionedQuery(pt, it, Some(partitionValue), from, to).flatMap(ps =>
                     val (p5, outliers) = Data.toBoxData(ps)
                     Ok(modal(p5AndOutliers(partitionValue, p5, outliers)).toString)
                 )
@@ -177,7 +180,5 @@ case class Contents(db: DB, institutionName: String, isDLP: Boolean):
             Ok(modal(trendBoxes(partition, partitionValue, queryIntervals(i))).toString)
 
         case GET -> Root / "drlsummary" / category / IntVar(i) if i >= 0 && i <= QueryInterval.qiSize =>
-            Ok(CTDRL.drlSummary(db, QueryInterval.fromOrdinal(i), category))
-
-        // DRL edit related paths
+            Ok(CTDRL.drlSummary(config.db, QueryInterval.fromOrdinal(i), category, config.doseDLP))
     }
