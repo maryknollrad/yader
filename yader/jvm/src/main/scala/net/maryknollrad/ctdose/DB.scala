@@ -20,15 +20,15 @@ object DB:
         
     object QueryInterval:
         val qiSize = QueryInterval.values.length
-        // def defaultRange(qi: QueryInterval) = if qi == QueryInterval.Day then (1, 0) else (0, 0)
-        def defaultRange(qi: QueryInterval) = (1, 0)
+        def defaultRange(qi: QueryInterval) = if qi == QueryInterval.Day then (1, 0) else (0, 0)
+        // def defaultRange(qi: QueryInterval) = (1, 0)
         
     enum QueryPartition(val strValue: String):
         case Bodypart extends QueryPartition("bodypart")
         // case Operator extends QueryPartition("operator")
         // case Physician extends QueryPartition("physician")
 
-    case class Partitioned(part: String, studydate: String, dateNumber: Int, accessionNumber: String, patientId: String, 
+    case class Partitioned(part: String, studydate: String, dateNumber: String, accessionNumber: String, patientId: String, 
         dose1: Double, dose2: Double, rank: Int) derives upickle.default.ReadWriter
 
     enum LogType:
@@ -171,7 +171,7 @@ trait DB:
 
     def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
         // two sql fragments that extracts subfields of time
-        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        // val (today, studyperiod) = timeIntervals(interval.ordinal)
         sql"""SELECT bodypart, count(*) as bcount 
         |FROM studies
         |WHERE ${timecondition(interval, from, to)} AND bodypart NOT LIKE '*%' 
@@ -180,7 +180,7 @@ trait DB:
 
     def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
         val pfrag = Fragment.const0(partition.strValue)
-        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        val (_, studyperiod) = timeIntervals(interval.ordinal)
         val subFragged = subpartition.map(p => fr"AND $pfrag = $p").getOrElse(Fragment.empty)
         sql"""SELECT $pfrag, studydate, $studyperiod as stime, acno, patientid, 
             | dosevalue1, dosevalue2, rank() OVER (PARTITION BY $pfrag, $studyperiod ORDER BY dosevalue1) FROM studies
@@ -242,16 +242,16 @@ trait DB:
     def dosefield(table: String, isDLP: Boolean) = Fragment.const(if isDLP then s"${table}.dlp" else s"${table}.ctdi")
 
     def drlSummary(category: String, interval: QueryInterval, from: Int, to: Int, isDLP: Boolean) = 
-        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        val (_, studyperiod) = timeIntervals(interval.ordinal)
         sql"""SELECT d2.label, $studyperiod as stime, s.dosevalue1 <= ${dosefield("d2", isDLP)} AS doseflag, count(*) $fromDrljoinFrag
             | WHERE c.cid = (SELECT cid FROM categories WHERE category = $category) AND
             | ${timecondition(interval, from, to)}
-            | GROUP BY d2.label, $studyperiod, doseflag ORDER BY d2.label, stime""".stripMargin
+            | GROUP BY d2.label, stime, doseflag ORDER BY d2.label, stime""".stripMargin
                 .query[(String, String, Boolean, Int)].to[List].transact(xa)
 
     def drlFull(category: String, interval: QueryInterval, from: Int, to: Int, isDLP: Boolean, includeNone: Boolean = true) = 
         val noneFrag = if !includeNone then Fragment.const("AND d1.label != 'NONE' ") else Fragment.empty
-        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        val (_, studyperiod) = timeIntervals(interval.ordinal)
         val patientAgeFrag = Fragment.const(age("s.studydate", "p.birthday"))
         sql"""SELECT d2.label, s.acno, s.patientid, $studyperiod AS stime, 
             | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 <= ${dosefield("d2", isDLP)} AS doseflag, 
@@ -262,7 +262,7 @@ trait DB:
                 .query[DrlResult].to[List].transact(xa)
 
     def bodypartCoverage(category: String, interval: QueryInterval, from: Int = 1, to: Int = 0) = 
-        val (today, studyperiod) = timeIntervals(interval.ordinal)
+        val (_, studyperiod) = timeIntervals(interval.ordinal)
         sql"""SELECT s.bodypart, $studyperiod AS stime, d.label != 'NONE' AS coverflag, count(*) 
             | FROM studies s 
 	        | JOIN ctdrljoin c ON s.sid = c.sid

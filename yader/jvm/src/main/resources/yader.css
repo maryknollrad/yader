@@ -2083,6 +2083,10 @@ input.tab:checked + .tab-content,
   margin-right: 5rem;
 }
 
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
 .flex {
   display: flex;
 }

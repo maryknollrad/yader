@@ -87,14 +87,14 @@ object CTDRL:
             bpartCover     <-      db.bodypartCoverage(category, interval, from, to)
         yield
             div(
+                div(cls := "text-2xl", "Exams under DRL"),
                 // div(drlRatio.mkString("<BR />")),
                 // div("-" * 30),
-                div(cls := "text-2xl", "Exams under DRL"),
                 showDrlStats(summarize(drlRatio, Some(todaysegment))),
                 // div("-" * 80),
+                div(cls := "text-2xl mt-2", "Bodypart Coverage"),
                 // div(bpartCover.mkString("<BR />")),
                 // div("-" * 30),
-                div(cls := "text-2xl mt-2", "Bodypart Coverage"),
                 showBpartCoverage(summarize(bpartCover, Some(todaysegment))),
                 button(onclick := "JS.getcsv();", "download CSV")
             ).toString

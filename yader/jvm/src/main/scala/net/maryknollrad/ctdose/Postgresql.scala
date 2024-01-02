@@ -19,7 +19,12 @@ case class Postgresql(database: String, user: String, password: String) extends 
     def age(f1: String, f2: String) = s"EXTRACT(YEAR FROM age($f1::timestamp, $f2::timestamp))"
 
     def subtime(value: String): Seq[Fragment] = 
-        Seq("day", "week", "month", "year").map(t => Fragment.const(s"extract($t from $value)"))
+        val years = Range(0, 3).map(_ => Some(s"extract(year from $value)")) :+ None
+        val rest = Seq(("doy", 3), ("week", 2), ("month", 2), ("year", 4))
+                        .map(t => s"lpad(extract(${t._1} from $value)::text, ${t._2}, '0')")
+        years.zip(rest).map(_ match 
+                case (Some(s1), s2) => Fragment.const(s"concat($s1, $s2)")
+                case (None, s2) => Fragment.const(s2))
 
     inline def daysbeforetoday(n: Int): String = 
         s"date_subtract(current_timestamp, '$n days')::date"
@@ -37,4 +42,4 @@ case class Postgresql(database: String, user: String, password: String) extends 
                     Fragment.const(s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'"))
             case QueryInterval.Year => 
                 (Fragment.const(s"date_trunc('year', current_date) - interval '$from years'"), 
-                    Fragment.const(s"date_trunc('month', current_date) + interval '${to + 1} months' - interval '1 day'"))
+                    Fragment.const(s"date_trunc('year', current_date) + interval '${to + 1} years' - interval '1 day'"))
