@@ -34,7 +34,7 @@ object DB:
     enum LogType:
         case  LastProcessedDate, Debug, Info, Warn, Error
 
-    case class DrlResult(label: String, accessionNumber: String, patientId: String, studyTime: String, age: Int, dose: Double, ctdi: Double, dlp: Double, isLessThan: Boolean, rank: Int)
+    case class DrlResult(label: String, accessionNumber: String, patientId: String, bodypart: String, studyDescription: String, studyTime: String, age: Int, dose: Double, ctdi: Double, dlp: Double, isLessThan: Boolean, rank: Int)
 
     private def weekago(dd: LocalDate): LazyList[LocalDate] = dd #:: weekago(dd.minusDays(7))
     private def weeklater(dd: LocalDate): LazyList[LocalDate] = dd #:: weekago(dd.plusDays(7))
@@ -253,9 +253,9 @@ trait DB:
         val noneFrag = if !includeNone then Fragment.const("AND d1.label != 'NONE' ") else Fragment.empty
         val (_, studyperiod) = timeIntervals(interval.ordinal)
         val patientAgeFrag = Fragment.const(age("s.studydate", "p.birthday"))
-        sql"""SELECT d2.label, s.acno, s.patientid, $studyperiod AS stime, 
+        sql"""SELECT d2.label, s.acno, s.patientid, s.bodypart, sn.studyname, $studyperiod AS stime, 
             | $patientAgeFrag as age, s.dosevalue1, d2.ctdi, d2.dlp, s.dosevalue1 <= ${dosefield("d2", isDLP)} AS doseflag, 
-            | rank() OVER (PARTITION BY d2.did ORDER BY s.dosevalue1) $fromDrljoinFrag
+            | rank() OVER (PARTITION BY d2.did ORDER BY s.dosevalue1) $fromDrljoinFrag JOIN ctstudies sn ON s.sid = sn.sid 
             | WHERE c.cid = (SELECT cid FROM categories WHERE category = $category) $noneFrag AND
             | ${timecondition(interval, from, to)}""".stripMargin
                 // .query[(String, String, String, String, String, Double, Double, Double, Boolean, Int)].to[List].transact(xa)
