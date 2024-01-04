@@ -4,6 +4,7 @@ import cats.effect.*
 import org.http4s.* 
 import org.http4s.dsl.io.*
 import scalatags.Text.all.*
+import scalatags.Text.tags2.title
 // import scalatags.Text.svgTags.{svg, path}
 // import scalatags.Text.svgAttrs.{d, fill, viewBox, stroke, strokeLinecap, strokeLinejoin, strokeWidth}
 import java.time.LocalDate
@@ -19,9 +20,9 @@ object Contents:
     def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
 
     val index = "<!DOCTYPE html>" + html(
-        data.theme := "cupcake",
+        data.theme := "corporate",
         head(
-            title := "YADER",
+            title("YADER"),
             meta(charset := "UTF-8"),
             meta(name := "viewport", content := "width=device-width, initial-scale=1.0"),
             script(src := "/assets/htmx.min.js"),
@@ -41,7 +42,7 @@ object Contents:
 
     def intervalButtons(selected: Int = 0) = 
         div(id := "intervals", cls := "flex flex-row p-4 space-x-12 justify-center items-center",
-            div(id := "intLabl", cls := "text-2xl font-bold", onclick := "JS.dialog('modal')", "Query Interval"),
+            div(id := "intLabl", cls := "text-2xl font-bold", /* onclick := "JS.dialog('modal')",*/ "Query Interval"),
             div(id := "intBtns", cls := "join",
                 queryIntervals.zipWithIndex.map((interval, i) => 
                     val c = "btn btn-outline btn-ghost" ++ (if i == selected then " btn-active" else "")
@@ -78,10 +79,10 @@ case class Contents(config: CTDoseConfig):
 
     private def jobs(drlEditable: Boolean)(selected: Int = 0) = 
         val jobsWithIndices = jobTabs.zipWithIndex.take(if drlEditable then 3 else 2)
-        div(id := "jobs", cls := "flex flex-row",
+        div(id := "jobs", cls := "flex flex-row justify-center items-center",
             jobsWithIndices.map((lbl, i) =>
-                val c = "w-1/5 h-10 rounded-t-lg px-4 -mb-2 hover:font-black " ++ (if i == selected then activeTabColor else inactiveTabColor)
-                div(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i);", lbl)
+                val c = "btn btn-outline btn-ghost" ++ (if i == selected then " btn-active" else "")
+                button(id := s"jtab$i", cls := c, onclick := s"JS.tabClick($i)", lbl)
             )).toString
 
     private def graphs() = 
@@ -180,5 +181,5 @@ case class Contents(config: CTDoseConfig):
             Ok(modal(trendBoxes(partition, partitionValue, queryIntervals(i))).toString)
 
         case GET -> Root / "drlsummary" / category / IntVar(i) if i >= 0 && i <= QueryInterval.qiSize =>
-            Ok(CTDRL.drlSummary(config.db, QueryInterval.fromOrdinal(i), category, config.doseDLP))
+            Ok(CTDRL.drlSummary(config.db, QueryInterval.fromOrdinal(i), category, config.doseDLP, config.showNone))
     }

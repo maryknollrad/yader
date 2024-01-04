@@ -7,9 +7,10 @@ import net.maryknollrad.ctdose.DB.QueryInterval
 import cats.effect.IO
 
 object CTDRL:
-    def selects(targetFunction: String, sId: String, ss: List[String], sValue: String) = 
+    def selects(targetFunction: String, sId: String, ss: List[String], sValue: String, bigFont: Boolean = false) = 
+        val sclass = "downdown-content z-[1] select w-full max-w-xs " ++ (if bigFont then "text-2xl" else "text")
         select(id := sId, 
-            onchange := s"JS.${targetFunction}('$sId');", cls := "downdown-content z-[1] select w-full max-w-xs", 
+            onchange := s"JS.${targetFunction}('$sId');", cls := sclass, 
             ss.map(o => 
                 if (o == sValue) then option(selected, o)
                 else option(o)))
@@ -17,7 +18,7 @@ object CTDRL:
     private def catSelects(targetFName: String, sId: String, ss: List[String], sValue: String) = 
         div(id := "category", cls := "flex flex-row items-center",
             h3(cls := "text-2xl mr-20", "Categories"),
-            selects(targetFName, sId, ss, sValue))
+            selects(targetFName, sId, ss, sValue, true))
 
     def editCT(db: DB, catIndex: Int = 0) = 
         import cats.effect.IO
@@ -27,25 +28,27 @@ object CTDRL:
             drls    <-      db.getLabels(catName)
             ss      <-      db.getStudies(catName)
         yield 
-            div(id := "editct",
+            div(id := "editct", cls := "flex flex-col gap-3 place-items-center",
                 catSelects("editDRLChanged", "catSelect", cats.map(_._2), catName),
-                table(cls := "table table-zebra",
-                    thead(tr(Seq("Study Description", "Label").map(th(_)))),
-                    tbody(ss.map((sname, sid, label) => 
-                        tr(td(sname), 
-                        td(selects("editDRLChanged", s"drl_${cats(catIndex)._1}_$sid", drls, label)))))
+                div(id := "tableContainer", 
+                    table(cls := "table table-zebra table-auto grow-0",
+                        thead(tr(Seq("Study Description", "Label").map(th(_)))),
+                        tbody(ss.map((sname, sid, label) => 
+                            tr(td(sname), 
+                            td(selects("editDRLChanged", s"drl_${cats(catIndex)._1}_$sid", drls, label))))))
             )).toString
 
     def showStat(db: DB, catIndex: Int = 0) = 
         db.getCategories().map(cats =>
             val catName = cats(catIndex)._2
-            div(id := "drlstats",
+            div(id := "drlstats", cls := "flex flex-col gap-3 place-items-center",
                 catSelects("updateDrlSummary", drlSummaryCategoryId, cats.map(_._2), catName),
                 Contents.intervalButtons(),
                 div(id := drlResultId, 
                     data.hx.get := s"/c/drlsummary/$catName/0", data.hx.target := s"#$drlResultId", data.hx.trigger := "load")
             ).toString)
 
+    /*
     private def showDrlStat(t5: Tuple5[String, Int, Int, Double, Double]) = 
         val (label, time, count, ratio, trend) = t5
         div(cls := "flex flex-row", 
@@ -61,6 +64,7 @@ object CTDRL:
                     div(cls := "stat-title", "Trend"),
                     div(cls := "stat-value", trend))
             ))
+    */
 
     private def showDrlStats(s: DrlSummary) = 
         table(cls := "table", 
@@ -78,25 +82,25 @@ object CTDRL:
                     tr(td(label), td(time), td(f"$ratio%.1f%%"), td(s"$count/$total"))
                     })))
 
-    def drlSummary(db: DB, interval: QueryInterval, category: String, isDLP: Boolean) = 
+    def drlSummary(db: DB, interval: QueryInterval, category: String, isDLP: Boolean, showNone: Boolean) = 
         val (from, to, adjust) = if interval == QueryInterval.Day then (2, 1, 1) else (1, 0, 0)
         for 
             todaysegstr    <-      db.todaySubTime(interval)
             todaysegment   =       todaysegstr.toInt - adjust
             drlRatio       <-      db.drlSummary(category, interval, from, to, isDLP)
+            drlFiltered    =       if showNone then drlRatio else drlRatio.filterNot(_._1 == "NONE") 
             bpartCover     <-      db.bodypartCoverage(category, interval, from, to)
         yield
-            div(
+            div(cls := "flex flex-col gap-3",
                 div(cls := "text-2xl", "Exams under DRL"),
                 // div(drlRatio.mkString("<BR />")),
                 // div("-" * 30),
-                showDrlStats(summarize(drlRatio, Some(todaysegment))),
-                // div("-" * 80),
+                showDrlStats(summarize(drlFiltered, Some(todaysegment))),
                 div(cls := "text-2xl mt-2", "Bodypart Coverage"),
                 // div(bpartCover.mkString("<BR />")),
                 // div("-" * 30),
                 showBpartCoverage(summarize(bpartCover, Some(todaysegment))),
-                button(onclick := "JS.getcsv();", "download CSV")
+                button(cls := "text-2xl btn grow-0 justify-self-end", onclick := "JS.getcsv();", "Download CSV")
             ).toString
 
     type DrlResult = List[(String, String, Boolean, Int)]

@@ -34,7 +34,7 @@ object DB:
     enum LogType:
         case  LastProcessedDate, Debug, Info, Warn, Error
 
-    case class DrlResult(label: String, acno: String, patientId: String, stime: String, age: Int, dose: Double, ctdi: Double, dlp: Double, isLessThan: Boolean, rank: Int)
+    case class DrlResult(label: String, accessionNumber: String, patientId: String, studyTime: String, age: Int, dose: Double, ctdi: Double, dlp: Double, isLessThan: Boolean, rank: Int)
 
     private def weekago(dd: LocalDate): LazyList[LocalDate] = dd #:: weekago(dd.minusDays(7))
     private def weeklater(dd: LocalDate): LazyList[LocalDate] = dd #:: weekago(dd.plusDays(7))

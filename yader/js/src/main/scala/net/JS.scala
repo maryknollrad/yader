@@ -132,10 +132,8 @@ object JS:
     def tabClick(index: Int) = 
         if index != tabIndex then
             resetTab()
-            htmx.removeClass(htmx.find(s"#jtab$index"), inactiveTab)
-            htmx.addClass(htmx.find(s"#jtab$index"), activeTab)
-            htmx.removeClass(htmx.find(s"#jtab$tabIndex"), activeTab)
-            htmx.addClass(htmx.find(s"#jtab$tabIndex"), inactiveTab)
+            htmx.addClass(htmx.find(s"#jtab$index"), "btn-active")
+            htmx.removeClass(htmx.find(s"#jtab$tabIndex"), "btn-active")
             tabIndex = index
             htmx.ajax("GET", s"/c/tab/$index", "#contents")
 
