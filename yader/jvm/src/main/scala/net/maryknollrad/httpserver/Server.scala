@@ -22,14 +22,12 @@ object HttpServer:
             Ok(Contents.index, `Content-Type`(textHtmlType))
 
         case request@GET -> Root / "yader.js" =>
-            StaticFile.fromPath(Path("./yader/js/target/scala-3.3.1/yader-fastopt/main.js"), Some(request)).getOrElseF(NotFound())
+            // StaticFile.fromPath(Path("./yader/js/target/scala-3.3.1/yader-fastopt/main.js"), Some(request)).getOrElseF(NotFound())
+            StaticFile.fromPath(Path("./yader/js/target/scala-3.3.1/yader-opt/main.js"), Some(request)).getOrElseF(NotFound())
 
         case request@GET -> Root / "assets" / file =>
             StaticFile.fromResource(file, Some(request)).getOrElseF(NotFound())
     }
-
-    def drlEditable(config: CTDoseConfig, req: Request[_]): Boolean = 
-        req.remoteAddr.map(ip => config.drlEditIps.isEmpty || config.drlEditIps.contains(ip)).getOrElse(false)
 
     def server(cdi: CTDoseConfig) = 
         val portNum = cdi.webPort.getOrElse(7878)
