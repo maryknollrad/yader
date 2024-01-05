@@ -1,6 +1,10 @@
 package net.maryknollrad.ctdose
 
-import net.maryknollrad.d4cs.{CFind, CGet, DicomBase, RetrieveLevel, DicomTags}
+import net.maryknollrad.d4cs.{RetrieveLevel}
+import net.maryknollrad.d4cs.DicomTags
+import net.maryknollrad.d4cs.DicomBase
+import net.maryknollrad.d4cs.CGet
+import net.maryknollrad.d4cs.CFind
 import RetrieveLevel.*
 import DicomBase.*
 import cats.effect.kernel.Resource
