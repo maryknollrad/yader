@@ -38,33 +38,15 @@ object CTDRL:
                             td(selects("editDRLChanged", s"drl_${cats(catIndex)._1}_$sid", drls, label))))))
             )).toString
 
-    def showStat(db: DB, catIndex: Int = 0) = 
+    def showStat(db: DB, category: Option[String]) = 
         db.getCategories().map(cats =>
-            val catName = cats(catIndex)._2
+            val catName = category.flatMap(c => cats.find(_._2.toLowerCase() == c.toLowerCase()).map(_._2)).getOrElse(cats.head._2)
             div(id := "drlstats", cls := "flex flex-col gap-3 place-items-center",
                 catSelects("updateDrlSummary", drlSummaryCategoryId, cats.map(_._2), catName),
                 Contents.intervalButtons(),
                 div(id := drlResultId, 
                     data.hx.get := s"/c/drlsummary/$catName/0", data.hx.target := s"#$drlResultId", data.hx.trigger := "load")
             ).toString)
-
-    /*
-    private def showDrlStat(t5: Tuple5[String, Int, Int, Double, Double]) = 
-        val (label, time, count, ratio, trend) = t5
-        div(cls := "flex flex-row", 
-            div(cls := "text-4xl", label),
-            div(cls := "stats shadow",
-                div(cls := "stat",
-                    div(cls := "stat-title", "Count"),
-                    div(cls := "stat-value", count)),
-                div(cls := "stat",
-                    div(cls := "stat-title", "Less than DRL"),
-                    div(cls := "stat-value", ratio)),
-                div(cls := "stat",
-                    div(cls := "stat-title", "Trend"),
-                    div(cls := "stat-value", trend))
-            ))
-    */
 
     private def showDrlStats(s: DrlSummary) = 
         table(cls := "table", 

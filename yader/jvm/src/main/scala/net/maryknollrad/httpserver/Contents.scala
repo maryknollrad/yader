@@ -156,7 +156,7 @@ case class Contents(config: CTDoseConfig):
                 case 0 =>
                     Ok(graphs())
                 case 1 =>
-                    Ok(CTDRL.showStat(config.db))
+                    Ok(CTDRL.showStat(config.db, config.defaultDrlCategory))
                 case 2 if config.drlEditable(req) =>
                     Ok(CTDRL.editCT(config.db, maybeCat.getOrElse(0)))
                 case _: Int =>

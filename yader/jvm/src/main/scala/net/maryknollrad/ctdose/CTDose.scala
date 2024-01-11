@@ -30,16 +30,6 @@ object CTDose:
     type GetResource = Resource[IO, CGet]
     type SOPInstanceUIDExtractor[A] = (CGet, String) => IO[A]
 
-    def findResource(ci: Configuration.ConnectionInfo) = 
-        Resource.make
-            (IO.blocking(CFind(ci.callingAe, ci.calledAe, ci.host, ci.port, ci.encoding)))
-            (f => IO.blocking(f.shutdown()))
-
-    def getResource(ci: Configuration.ConnectionInfo) = 
-        Resource.make
-            (IO.blocking(CGet(ci.callingAe, ci.calledAe, ci.host, ci.port, false)))
-            (g => IO.blocking(g.shutdown()))
-
     private def gather2Map(tags: Seq[StringTag], level: String, beginMap: Map[String, String] = Map.empty) = 
         tags.foldLeft(beginMap)((map, t) => 
             val tagString = ElementDictionary.keywordOf(t.tag, null)
@@ -148,7 +138,7 @@ object CTDose:
 
     /* POSSIBLY IMPORTANT
         map(...).sequence is easier to read than traverse because metal informs current type
-        but possibly map evaluated simultaneosly, causing strange results esp. dealing with external library
+        but (possibly) using map (in cats) causes evaluation simultaneosly, causing strange results esp. dealing with external library
     */
     private def series2firstSeriesFirstImageAttributes(seriesTags: Seq[Either[String, (TagValue, Seq[TagValues])]])
                     (using cfind: CFind, cget: CGet): IO[Seq[Either[String, Attributes]]] = 
@@ -276,12 +266,8 @@ object CTDose:
 
     def getCTDoses(config: Configuration.CTDoseConfig, diMap: CTDoseInfo.CTInfo, d: LocalDate = LocalDate.now(), collectTags: Seq[Int] = defaultCollectTags)
             :IO[(Seq[CTDoseResult], Seq[String])] = 
-        val r = for 
-            cfind <- findResource(config.connectionInfo)
-            cget <- getResource(config.connectionInfo)
-        yield (cfind, cget)
-
-        r.use:
+        DicomBase.resources(config.connectionInfo.host, config.connectionInfo.port, config.connectionInfo.calledAe, 
+            config.connectionInfo.callingAe, config.connectionInfo.encoding, false).use:
             case (cfind, cget) =>
                 given CFind = cfind
                 given CGet = cget

@@ -14,9 +14,10 @@ val jvmSettings = Seq(
     ),
     libraryDependencies ++= Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
-        "net.maryknollrad" %% "d4cs" % "0.5.0-SNAPSHOT",
+        "net.maryknollrad" %% "d4cs" % "0.5.8-SNAPSHOT",
+        "net.sourceforge.tess4j" % "tess4j" % "5.9.0",
+        "com.lihaoyi" %% "os-lib" % "0.9.3",
     ),
-    assembly / mainClass := Some("Yader"),
     assembly / assemblyMergeStrategy := {
         case PathList("module-info.class") => MergeStrategy.last
         case path if path.endsWith("/module-info.class") => MergeStrategy.last
@@ -39,11 +40,11 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
     .jvmSettings(
         // Compile / run / fork := true,
         jvmSettings,
+        assembly / mainClass := Some("Yader"),
         libraryDependencies ++= Seq(
             // "org.typelevel" %% "cats-effect" % catsEffectVersion,
             // "net.maryknollrad" %% "d4cs" % "0.5.0-SNAPSHOT",
             "org.ekrich" %% "sconfig" % "1.5.1",
-            "net.sourceforge.tess4j" % "tess4j" % "5.9.0",
             "org.slf4j" % "slf4j-simple" % "2.0.7",
             "org.tpolecat" %% "doobie-core" % doobieVersion,
             "org.tpolecat" %% "doobie-postgres"  % doobieVersion,
@@ -55,18 +56,19 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
             "org.http4s" %% "http4s-ember-client" % http4sVersion,
             "com.lihaoyi" %% "scalatags" % "0.12.0",
             "com.lihaoyi" %% "upickle" % "3.1.2",
-            "com.lihaoyi" %% "os-lib" % "0.9.1",
             // "com.lihaoyi" %% "mainargs" % "0.5.4"
             "org.gnieh" %% "fs2-data-csv" % "1.10.0",
             "org.gnieh" %% "fs2-data-csv-generic" % "1.10.0",
-            "org.http4s" %% "http4s-fs2-data-csv" % "0.2.0"
+            "org.http4s" %% "http4s-fs2-data-csv" % "0.2.0",
+            "org.slf4j" % "slf4j-simple" % "2.0.10"
         ),
     )
 
 lazy val yaderCli = (project in file("cli"))
     .settings(
         jvmSettings,
-        libraryDependencies ++= Seq(
-            
+        assembly / mainClass := Some("YaderCli"),
+        libraryDependencies ++= Seq(            
+            "org.slf4j" % "slf4j-nop" % "2.0.10",
         )
     )
