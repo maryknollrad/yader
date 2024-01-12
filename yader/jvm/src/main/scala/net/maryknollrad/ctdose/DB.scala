@@ -106,7 +106,7 @@ trait DB:
     protected lazy val createLogsSQL = 
         Fragment.const(s"""CREATE TABLE IF NOT EXISTS logs  
         | (logtime $datetimeType NOT NULL DEFAULT ($now), 
-        | logtype INTEGER NOT NULL DEFAULT 0, content TEXT NOT NULL, UNIQUE (logtype, logtime))""".stripMargin).update.run
+        | logtype INTEGER NOT NULL DEFAULT 0, content TEXT NOT NULL)""".stripMargin).update.run
 
     protected val createLogsIndexSQL = 
         fr"CREATE INDEX IF NOT EXISTS logindex ON logs (logtype, logtime)".update.run

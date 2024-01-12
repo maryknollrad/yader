@@ -14,7 +14,7 @@ val jvmSettings = Seq(
     ),
     libraryDependencies ++= Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
-        "net.maryknollrad" %% "d4cs" % "0.5.8-SNAPSHOT",
+        "net.maryknollrad" %% "d4cs" % "0.5.9-SNAPSHOT",
         "net.sourceforge.tess4j" % "tess4j" % "5.9.0",
         "com.lihaoyi" %% "os-lib" % "0.9.3",
     ),
@@ -70,5 +70,6 @@ lazy val yaderCli = (project in file("cli"))
         assembly / mainClass := Some("YaderCli"),
         libraryDependencies ++= Seq(            
             "org.slf4j" % "slf4j-nop" % "2.0.10",
+            "org.apache.commons" % "commons-text" % "1.11.0",
         )
     )

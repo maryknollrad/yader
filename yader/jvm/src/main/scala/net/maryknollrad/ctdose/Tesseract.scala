@@ -8,13 +8,15 @@ import java.nio.file.FileSystems
 object Tesseract:
     private val instance = new Tesseract()
     private var tesseractPath = ""
+    private val windows = "windows.*".r
 
     def setTesseractPath(tp: String) = 
-        val sep = FileSystems.getDefault().getSeparator()
-        val jnaPath = Seq(tp, "lib").mkString(sep)
-        val dataPath = Seq(tp, "share", "tessdata").mkString(sep)
-        System.setProperty("jna.library.path", jnaPath)
-        instance.setDatapath(dataPath)
+        val osname = System.getProperty("os.name").toLowerCase()
+        val (jnaPath, dataPath) = osname match 
+            case windows() => (os.Path(tp), os.Path(tp) / "tessdata")
+            case _ => (os.Path(tp) / "lib", os.Path(tp) / "share" / "tessdata")
+        System.setProperty("jna.library.path", jnaPath.toString)
+        instance.setDatapath(dataPath.toString)
         instance.setLanguage("eng")
 
     def doOCR(image: BufferedImage) = 

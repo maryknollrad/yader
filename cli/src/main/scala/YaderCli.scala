@@ -7,9 +7,10 @@ import net.maryknollrad.d4cs.*
 import javax.imageio.ImageIO
 import org.dcm4che3.io.DicomInputStream
 import net.sourceforge.tess4j.*
+import org.apache.commons.text.StringEscapeUtils
 
 object YaderCli extends IOApp:
-    private def config(host: String, port: Int, called: String, calling: String, encoding: String, tpath: String) = 
+    private def config(host: String, port: Int, called: String, calling: String, encoding: String, tpath: String, insts: Seq[String]) = 
         s"""host = "$host"
         |port = $port
         |called-ae = "$called"
@@ -23,9 +24,9 @@ object YaderCli extends IOApp:
         |# postgres-password = ""
         |
         |# install path of tesseract
-        |tesseract-path = "$tpath"
+        |tesseract-path = "${StringEscapeUtils.escapeJava(tpath)}"
         |# to filter other hospital's exam, multiple string values are supported
-        |institution = ["HOSPITAL NAME"]
+        |institution = [${insts.map(inst => s"\"$inst\"").mkString(",")}]
         |# dose value is ct or DLP
         |doseDLP = true
         |
@@ -89,11 +90,17 @@ object YaderCli extends IOApp:
         val dtags = DicomTags((Tag.SeriesInstanceUID, seriesUid), Tag.SOPInstanceUID)
         cfind.query(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelFind, Some(ImageLevel), dtags, maxNum)
 
-    private val dicomReader = ImageIO.getImageReadersByFormatName("DICOM").next()
+    private lazy val dicomReader = ImageIO.getImageReadersByFormatName("DICOM").next()
 
     private def getDicomStream(sopInstanceUid: String)(using cget: CGet) = 
         cget.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), DicomTags((Tag.SOPInstanceUID, sopInstanceUid)))
             .map(_ => cget.getDicomInputStreamAndFree(sopInstanceUid))
+
+    private def getTwoDicomStreams(sopInstanceUid: String)(using cget: CGet) = 
+        cget.getStudy(org.dcm4che3.data.UID.StudyRootQueryRetrieveInformationModelGet, Some(ImageLevel), DicomTags((Tag.SOPInstanceUID, sopInstanceUid)))
+            .map(_ => 
+                cget.getDicomInputStream(sopInstanceUid).flatMap(d1 =>
+                    cget.getDicomInputStreamAndFree(sopInstanceUid).map(d2 => (d1, d2))))
 
     import java.awt.image.BufferedImage
     import java.io.File
@@ -111,10 +118,14 @@ object YaderCli extends IOApp:
             case mac() if os.exists(os.Path(macBrewTess)) => Some(macBrewTess)
             case _ => None
                 
-    private def saveAndOCR(i: Int, dis: DicomInputStream, tp: Option[String] = None) = 
+    private def saveAndOCR(i: Int, ds: Tuple2[DicomInputStream, DicomInputStream], tp: Option[String] = None) = 
         IO.blocking:
-            dicomReader.setInput(dis)
+            // single instance of DicomInputStream works fine at CTDose.scala, but fails in here
+            // provide separate instances for readDataset and read
+            val attrs = ds._1.readDataset()
+            dicomReader.setInput(ds._2)
             val im = dicomReader.read(0, dicomReader.getDefaultReadParam())
+            val institution = Option(attrs.getString(Tag.InstitutionName))
             val fname = os.pwd / s"dose$i.png"
             javax.imageio.ImageIO.write(im, "png", fname.toIO)
             tp.map: p => 
@@ -125,7 +136,7 @@ object YaderCli extends IOApp:
                 System.setProperty("jna.library.path", jnaPath.toString)
                 tess.setDatapath(dataPath.toString)
                 tess.setLanguage("eng")
-                tess.doOCR(im)
+                (tess.doOCR(im), institution)
 
     private val successfulPing = "PING was succussful.\nThe server is reachable and the server responded."
     private val unsuccessfulPing = "PING failed.\nServer is not reachable or the sever did not respond."
@@ -151,29 +162,30 @@ object YaderCli extends IOApp:
                             choice   <- printline *> printAndRead(s"Which one is dose report series? (1-${lses.length})", Some(numberInRange(1 to lses.length)))
                             lis      <- findImages(lses(choice.toInt - 1).last.value)
                             _        <- printline *> IO.println(s"Dose report series has ${lis.length} images")
-                            edcms    <- lis.traverse(is => getDicomStream(is.last.value))
+                            edcms    <- lis.traverse(is => getTwoDicomStreams(is.last.value))
                             (e, ds)  =  edcms.partition(_.isLeft)
                             errs     =  e.flatMap(_.swap.toOption)
                             dcms     =  ds.flatMap(_.toOption)
                             tpath    <- printAndRead(s"Got ${dcms.length} images with ${errs.length} error(s). Enter the path where tesseract is installed.", default = findTesseract)
                             otpath   =  if tpath.isBlank() then None else Some(tpath.trim())
-                            ocr      <- dcms.zipWithIndex.traverse :
+                            ocrs     <- dcms.zipWithIndex.traverse :
                                             case (dcm, i) => saveAndOCR(i, dcm, otpath).flatMap({
                                                     _ match
-                                                        case Some(ans) => 
+                                                        case Some((ans, oinst)) => 
                                                             printline *> IO.println("Result") *> IO.println(ans) *> printline
-                                                            *> IO.pure(Option(ans))
+                                                            *> IO.pure(oinst)
                                                         case _ => 
                                                             IO.pure(None)
                                                 })
-                            files    =  if ocr.length == 1 then 
+                            files    =  if ocrs.length == 1 then 
                                             "1 file. (dose0.png)" 
                                         else 
-                                            s"${ocr.length} files. (dose0.png - dose${ocr.length-1}.png)"
+                                            s"${ocrs.length} files. (dose0.png - dose${ocrs.length-1}.png)"
+                            insts    =  ocrs.flatten.distinct.sorted
                             _        <- printline *> IO.println(s"Stored $files")
                             _        <- otpath match 
                                             case Some(tp) => 
-                                                IO(os.write(os.pwd / "yader.conf", config(host, port, called, calling, encoding, tp)))
+                                                IO(os.write.over(os.pwd / "yader.conf", config(host, port, called, calling, encoding, tp, insts)))
                                                 *> printline *> IO.println("Saved yader.conf file.")
                                             case _ => IO.unit
                         yield () }
