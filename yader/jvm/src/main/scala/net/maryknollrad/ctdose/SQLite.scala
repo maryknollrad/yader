@@ -50,9 +50,9 @@ case class SQLite() extends DB:
                 val (d1, d2) = DB.getWeekBoundary(from, to)
                 (s"date('${d1.format(ISO_DATE)}')", s"date('${d2.format(ISO_DATE)}')")
             case QueryInterval.Month => 
-                (s"date('now', 'start of month', '- $from months')", 
+                (s"date('now', 'start of month', '-$from months')", 
                     s"date('now', 'start of month', '${-to+1} months', '-1 day')")
             case QueryInterval.Year => 
-                (s"date('now', 'start of year', '- $from years')",
+                (s"date('now', 'start of year', '-$from years')",
                     s"date('now', 'start of year', '${-to+1} years', '-1 day')")
         (Fragment.const(fFrag), Fragment.const(tFrag))

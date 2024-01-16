@@ -114,6 +114,7 @@ object CTDoseInfo:
         val ctags = collectTags.getOrElse(CTDose.getDefaultCollectTags())
         for 
             _               <-  conf.db.createTablesIfNotExists()
+            _               <-  DRLVals.initCategoriesIfNedded(conf.db)
             olastDate       <-  conf.db.getLastDateProcessed()
             _               <-  { 
                                 val beginDate = olastDate match

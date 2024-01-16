@@ -117,7 +117,7 @@ object Configuration:
                 // TODO : add printIp option as command line argument
                 CTDoseConfig(ci, db, tpath, isDLP, institutionNames, storepng, encoding, 
                     processBegin, processDayBehind, pauseInterval, calev, webport, 
-                    drlEditIps, true, showNone, defaultDrlCategory)
+                    drlEditIps, false, showNone, defaultDrlCategory)
             .toEither.left.map(_.getMessage())
         else Left(s"Cannot find $fname.conf")
 

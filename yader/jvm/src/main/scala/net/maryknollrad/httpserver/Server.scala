@@ -14,16 +14,17 @@ import net.maryknollrad.ctdose.CTDose
 
 object HttpServer:
     import org.http4s.server.middleware.*
-
+    import org.slf4j.{Logger, LoggerFactory}
+    private val logger = LoggerFactory.getLogger(getClass)
     private val textHtmlType = MediaType.unsafeParse("text/html")
 
     val staticService = HttpRoutes.of[IO] {
         case GET -> Root =>
             Ok(Contents.index, `Content-Type`(textHtmlType))
 
-        case request@GET -> Root / "yader.js" =>
+        // case request@GET -> Root / "yader.js" =>
             // StaticFile.fromPath(Path("./yader/js/target/scala-3.3.1/yader-fastopt/main.js"), Some(request)).getOrElseF(NotFound())
-            StaticFile.fromPath(Path("./yader/js/target/scala-3.3.1/yader-opt/main.js"), Some(request)).getOrElseF(NotFound())
+            // StaticFile.fromPath(Path("./yader/js/target/scala-3.3.1/yader-opt/main.js"), Some(request)).getOrElseF(NotFound())
 
         case request@GET -> Root / "assets" / file =>
             StaticFile.fromResource(file, Some(request)).getOrElseF(NotFound())

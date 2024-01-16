@@ -60,14 +60,19 @@ object DRLVals:
 
     private val drls = Map("korea" -> koreaSpec, "euclid" -> euclidSpec, "japan" -> japanSpec)
 
-    def initCategories(db: DB, cs: String*) = 
+    def initCategoriesIfNedded(db: DB, cs: String*) = 
         import cats.implicits.*
         
         val keys = if cs.length == 0 then drls.keys.toSeq else cs.map(_.toLowerCase).filter(drls.contains)
         keys.flatTraverse(k =>
-            db.insertCategory(k) *>
-            drls(k).zipWithIndex.traverse((t, i) => 
-                t match
-                    case t3: Tuple3[String, Double, Double] => db.insertDrl(k, i+1, t3._1, t3._2, t3._3)
-                    case t5: Tuple5[String, Double, Double, Int, Int] => db.insertDrl(k, i+1, t5._1, t5._2, t5._3, t5._4, t5._5)
-        ))
+            db.insertCategoryIfNedded(k).flatMap( _ match 
+                case count if count > 0 => 
+                    drls(k).zipWithIndex.traverse((t, i) => 
+                        t match
+                            case t3: Tuple3[String, Double, Double] => db.insertDrl(k, i+1, t3._1, t3._2, t3._3)
+                            case t5: Tuple5[String, Double, Double, Int, Int] => db.insertDrl(k, i+1, t5._1, t5._2, t5._3, t5._4, t5._5)
+                    )
+                case _ =>
+                    cats.effect.IO(Seq.empty)
+            )
+        )

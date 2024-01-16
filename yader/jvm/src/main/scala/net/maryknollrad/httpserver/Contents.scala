@@ -17,6 +17,8 @@ import net.maryknollrad.yader.Constants.*
 import net.maryknollrad.ctdose.Configuration.CTDoseConfig
 
 object Contents:
+    private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+
     def replace(targetUrl: String) = Seq[Modifier](data.hx.get := targetUrl, data.hx.trigger := "load")
 
     val index = "<!DOCTYPE html>" + html(
@@ -27,7 +29,7 @@ object Contents:
             meta(name := "viewport", content := "width=device-width, initial-scale=1.0"),
             script(src := "/assets/htmx.min.js"),
             script(src := "/assets/apexcharts.js"), // manually downloaded js and copied to htest/jvm/src/main/resources
-            script(src := "yader.js"),
+            script(src := "/assets/yader.js"),
             link(href := "/assets/yader.css", rel := "stylesheet")
         ),
         body( 
@@ -51,7 +53,7 @@ object Contents:
         )
 
 case class Contents(config: CTDoseConfig):
-    import Contents.intervalButtons
+    import Contents.{intervalButtons, logger}
 
     private def header(dateString: String, count: Int, dosesum: Double, sdate: String): String = 
         val doseUnit = if config.doseDLP then "mGy.cm" else "mGy"
@@ -152,6 +154,7 @@ case class Contents(config: CTDoseConfig):
             Ok(jobs(config.drlEditable(req))())
 
         case req @ GET -> Root / "tab" / IntVar(i) :? OptionalIntQueryParamMatcher(maybeCat) =>
+            logger.info("preparing contents for tab {}", i)
             i match 
                 case 0 =>
                     Ok(graphs())

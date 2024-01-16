@@ -4,6 +4,8 @@ import java.time.{LocalDate, LocalTime}
 import doobie.postgres.implicits.*
 
 object DB:
+    private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+
     case class Study(accessionNumber: String, patientId: String, studyDate: LocalDate, studyTime: LocalTime, 
         description: String, alternative: String, bodypart: String, manufacturer: String, model: String, 
         station: String, operator: String, physician: String, dose1: Double, dose2: Double)
@@ -43,12 +45,14 @@ object DB:
         val prevMonday = d.minusDays(d.getDayOfWeek().getValue() - 1)
         weekago(prevMonday)
 
+    import scala.util.chaining.*
     def getWeekBoundary(from: Int, to: Int) = 
         val today = LocalDate.now()
         val twd = today.getDayOfWeek().getValue()
         val commingSunday = today.plusDays(7 - twd)
         val prevMonday = today.minusDays(twd - 1)
-        (weekago(prevMonday)(from), weekago(commingSunday)(to))
+        // logger.debug("week boundary {} - {}", weekago(prevMonday)(from), weekago(commingSunday)(to))
+        (weekago(prevMonday)(from), weekago(commingSunday)(to)) // .tap(println)
 
 trait DB:
     import cats.effect.IO
@@ -112,6 +116,7 @@ trait DB:
         fr"CREATE INDEX IF NOT EXISTS logindex ON logs (logtype, logtime)".update.run
 
     def createTablesIfNotExists() = 
+        logger.info("creating needed tables")
         // (createPatientsSQL, createLogsSQL, createCTStudiesSQL, createStudiesSQL).mapN(_ + _ + _ + _).transact(xa)
         Seq(createPatientsSQL, createCTStudiesSQL, createLogsSQL, createLogsIndexSQL, createStudiesSQL, createStudiesStudydateIndexSQL, 
             createCategoriesSQL, createDrlsSQL, createCTDrlJoinSQL).reduce(_ *> _).transact(xa)
@@ -153,6 +158,7 @@ trait DB:
         q.query[(Int, String)].to[List].transact(xa)
 
     def insertStudyAndPatient(study: Study, patient: Patient) = 
+        logger.info("inserting study {} and patient {}", study, patient)
         val patientInsert = sql"""INSERT INTO patients VALUES (${patient.id}, ${patient.sex}, ${patient.birthday}) ON CONFLICT DO NOTHING""".update.run
         val getSid = sql"""INSERT INTO ctstudies (studyname) VALUES (${study.description})
             | ON CONFLICT (studyname) DO UPDATE SET dummy = true RETURNING sid""".stripMargin.query[Int].unique
@@ -172,6 +178,7 @@ trait DB:
     def getBodypartCounts(interval: QueryInterval, from: Int = 1, to: Int = 0) = 
         // two sql fragments that extracts subfields of time
         // val (today, studyperiod) = timeIntervals(interval.ordinal)
+        logger.info("querying bodypart counts using fragment - {}", timecondition(interval, from, to))
         sql"""SELECT bodypart, count(*) as bcount 
         |FROM studies
         |WHERE ${timecondition(interval, from, to)} AND bodypart NOT LIKE '*%' 
@@ -179,6 +186,7 @@ trait DB:
             .query[(String, Long)].to[List].transact(xa)
 
     def partitionedQuery(partition: QueryPartition, interval: QueryInterval, subpartition: Option[String] = None, from: Int = 1, to: Int = 0) = 
+        logger.info("partitioned query using fragment - {}", timecondition(interval, from, to))
         val pfrag = Fragment.const0(partition.strValue)
         val (_, studyperiod) = timeIntervals(interval.ordinal)
         val subFragged = subpartition.map(p => fr"AND $pfrag = $p").getOrElse(Fragment.empty)
@@ -207,15 +215,22 @@ trait DB:
         | WHERE categories.category = $category GROUP BY label ORDER BY max(dorder)""".stripMargin
             .query[(String, Int)].map(_._1).to[List].transact(xa)
 
-    def insertCategory(category: String) = 
+    def insertCategoryIfNedded(category: String) = 
+        val selectCategory = sql"SELECT cid FROM categories WHERE category = $category".query[Int].option
         val insertCategory = sql"INSERT INTO categories (category) VALUES ($category) RETURNING cid".query[Int].unique
         def insertNoneDrl(cid: Int) = sql"INSERT INTO drls (cid, label, ctdi, dlp, dorder) VALUES ($cid, 'NONE', 0, 0, 0) RETURNING did".query[Int].unique
         def setDefaultsToNone(cid: Int, did: Int) = sql"INSERT INTO ctdrljoin SELECT sid, $cid, $did FROM ctstudies".update.run
-        val run = for 
-            cid     <-  insertCategory
-            did     <-  insertNoneDrl(cid)
-            count   <-  setDefaultsToNone(cid, did)
-        yield count
+        val run = selectCategory.flatMap(_ match
+                case None => 
+                    logger.info("inserting category {} and populating drls", category)
+                    (for 
+                        cid     <-  insertCategory
+                        did     <-  insertNoneDrl(cid)
+                        count   <-  setDefaultsToNone(cid, did)
+                    yield count)
+                case Some(cid) => 
+                    doobie.free.connection.pure(0)
+            )
         run.transact(xa)
 
     def insertDrl(category: String, dorder: Int, label: String, ctdi: Double, dlp: Double, minAge: Int = 0, maxAge: Int = Int.MaxValue) = 
@@ -274,3 +289,20 @@ trait DB:
 
     def todaySubTime(i: QueryInterval) = 
         sql"""SELECT ${timeIntervals(i.ordinal)._1}""".query[String].unique.transact(xa)
+
+    def getNonMatchedStudies(category: String) = 
+        sql"""SELECT ctstudies.studyname, ctstudies.sid, 'NONE' FROM ctstudies 
+        | LEFT JOIN ctdrljoin 
+        | ON ctstudies.sid = ctdrljoin.sid AND ctdrljoin.cid = (SELECT cid FROM categories WHERE category = $category)
+        | WHERE ctdrljoin.did IS NULL 
+        | ORDER BY ctstudies.sid""".stripMargin
+            .query[(String, Int, String)].to[List].transact(xa)
+            
+    def matchToNone(category: String, ss: List[(String, Int, String)]) = 
+        val u = { for
+            cid         <- sql"SELECT cid FROM categories WHERE category = $category".query[Int].unique
+            did         <- sql"SELECT did FROM DRLS WHERE cid = $cid AND label = 'NONE'".query[Int].unique
+            inserted    <- Update[(Int, Int, Int)]("INSERT INTO ctdrljoin VALUES (?, ?, ?)")
+                                .updateMany(ss.map(t3 => (t3._2, cid, did)))
+        yield inserted }
+        u.transact(xa)

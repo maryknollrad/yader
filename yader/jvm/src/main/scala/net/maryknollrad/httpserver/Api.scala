@@ -12,6 +12,8 @@ import upickle.default.{ReadWriter => RW, macroRW, write}
 import fs2.{Stream, Pipe}
 
 object Api: 
+    private val logger = org.slf4j.LoggerFactory.getLogger(getClass)
+
     def optionInterval(argument: String): Option[QueryInterval] =
         QueryInterval.values.find(_.strValue == argument)    
     
@@ -60,6 +62,7 @@ case class Api(config: CTDoseConfig):
             val qi = QueryInterval.fromOrdinal(i)
             // if selected interval is day, show yesterday else this interval
             val (from, to) = QueryInterval.defaultRange(qi)
+            logger.info("preparing data for graph data {}", qi)
             bpartsCounts(qi, from, to).flatMap(bparts =>
                 doseBox(qi, from, to).flatMap(boxmap => 
                     Ok(write(GraphData(bparts._1, bparts._2, boxmap)))
@@ -79,7 +82,7 @@ case class Api(config: CTDoseConfig):
         case req @ GET -> Root / "setdrl" / cidStr / sidStr / dlabel if config.drlEditable(req) =>
             cidStr.toIntOption.flatMap(cid => sidStr.toIntOption.map(sid => (cid, sid))) match 
                 case Some((cid, sid)) =>
-                    config.db.updateDrl(cid.toInt, sid.toInt, dlabel).flatMap(_ match
+                    config.db.updateDrl(cid, sid, dlabel).flatMap(_ match
                         case 1 => 
                             Ok("success")
                         case n =>

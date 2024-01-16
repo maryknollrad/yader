@@ -27,15 +27,26 @@ object CTDRL:
             catName =       cats(catIndex)._2
             drls    <-      db.getLabels(catName)
             ss      <-      db.getStudies(catName)
+            nonrs   <-      db.getNonMatchedStudies(catName)
+            _       <-      if nonrs.nonEmpty then {
+                                db.matchToNone(catName, nonrs) *> 
+                                db.log(s"Matched ${nonrs.length} studies to NONE at DRL category $catName", DB.LogType.Info)
+                            } else 
+                                IO(0)
         yield 
-            div(id := "editct", cls := "flex flex-col gap-3 place-items-center",
-                catSelects("editDRLChanged", "catSelect", cats.map(_._2), catName),
-                div(id := "tableContainer", 
+            def tabulate(t: String, ss: List[(String, Int, String)]) = 
+                div(div(cls := "text-2xl", t),
                     table(cls := "table table-zebra table-auto grow-0",
                         thead(tr(Seq("Study Description", "Label").map(th(_)))),
                         tbody(ss.map((sname, sid, label) => 
                             tr(td(sname), 
-                            td(selects("editDRLChanged", s"drl_${cats(catIndex)._1}_$sid", drls, label))))))
+                            td(selects("editDRLChanged", s"drl_${cats(catIndex)._1}_$sid", drls, label)))))))
+            div(id := "editct", cls := "flex flex-col gap-3 place-items-center",
+                catSelects("editDRLChanged", "catSelect", cats.map(_._2), catName),
+                div(id := "tableContainer", 
+                    if nonrs.nonEmpty then tabulate("Non matched studies", nonrs)
+                    else { Seq.empty[Modifier] },
+                    tabulate("Matched studies", ss)
             )).toString
 
     def showStat(db: DB, category: Option[String]) = 
