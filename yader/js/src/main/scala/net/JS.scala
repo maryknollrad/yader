@@ -209,7 +209,7 @@ object JS:
         e.offsetWidth;
         htmx.addClass(e, "mark")
 
-    private val drlr = raw"drl_(\d{1,2})_(\d{1,2})".r
+    private val drlr = raw"drl_(\d{1,2})_(\d{1,})".r
     private val categorySelectId = "catSelect"
     @JSExport
     // call back of selection changed, has different names depending on tab 

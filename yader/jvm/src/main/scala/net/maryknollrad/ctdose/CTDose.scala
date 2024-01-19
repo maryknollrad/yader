@@ -75,7 +75,8 @@ object CTDose:
 
     private def seriesBySeriesNumber(sesTags: Seq[Seq[StringTag]], targetNumber: Int) = 
         val targetString = targetNumber.toString()
-        sesTags.find(seTags => seTags.exists(t => t.tag == Tag.SeriesNumber && t.value == targetString))
+        // sometimes dose report series may be duplicated (possibly from scanogram only), select last ones
+        sesTags.findLast(seTags => seTags.exists(t => t.tag == Tag.SeriesNumber && t.value == targetString))
             .toRight(s"Cannot find series number $targetNumber ${sesTags.head.pipe(accessionNumber)}")
 
     private def seriesByIndex(sesTags: Seq[Seq[StringTag]], index: Int) = 
@@ -84,7 +85,8 @@ object CTDose:
         sesTags(i).asRight[String]
 
     private def seriesBySeriesName(sesTags: Seq[TagValues], targetString: String) = 
-        sesTags.find(seTags => seTags.exists(t => t.tag == Tag.SeriesDescription && t.value.contains(targetString)))
+        // sometimes dose report series may be duplicated (possibly from scanogram only), select last ones
+        sesTags.findLast(seTags => seTags.exists(t => t.tag == Tag.SeriesDescription && t.value.contains(targetString)))
             .toRight(s"""Cannot find series containing "$targetString" (Accession Number : ${sesTags.head.pipe(accessionNumber)})""")
 
     private def accessionNumber(tags: Seq[StringTag]) = 

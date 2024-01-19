@@ -43,7 +43,7 @@ object YaderCli extends IOApp:
         |# calendar-event = "*-*-* 08:30:00"
         |
         |
-        |# optional, if given store png images to (value of store-png-path) / yyyymmdd / accessionNumber.png
+        |# optional, stores png images of dose report series to (value of store-png-path) / yyyymmdd / accessionNumber.png with extracted dose value
         |# store-png-path = "doseimg"
         |
         |# web server port number
@@ -62,7 +62,7 @@ object YaderCli extends IOApp:
         |""".stripMargin
 
     private def printHello = 
-        IO.println("Yader configuration utility\n")
+        IO.println("Yader configuration utility\n\n")
     
     import Console.*
     private def getServer = 

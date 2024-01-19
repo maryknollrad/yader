@@ -197,7 +197,9 @@ trait DB:
 
     def getStudies(category: String = "korea"): IO[List[(String, Int, String)]] = 
         sql"""SELECT studyname, ctstudies.sid, label FROM ctstudies JOIN ctdrljoin ON ctstudies.sid = ctdrljoin.sid  
-        | JOIN drls ON ctdrljoin.did = drls.did JOIN categories ON drls.cid = categories.cid WHERE categories.category = $category ORDER BY ctstudies.sid""".stripMargin
+        | JOIN drls ON ctdrljoin.did = drls.did 
+        | JOIN categories ON drls.cid = categories.cid 
+        | WHERE categories.category = $category ORDER BY ctstudies.studyname""".stripMargin
             .query[(String, Int, String)].to[List].transact(xa)
 
     def getCategories(): IO[List[(Int, String)]] = 
