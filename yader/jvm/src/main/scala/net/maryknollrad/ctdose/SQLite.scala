@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter
 
 case class SQLite() extends DB:
     val xa = Transactor.fromDriverManager[IO](
-        "org.sqlite.JDBC", "jdbc:sqlite:ctdose.db", None
+        "org.sqlite.JDBC", "jdbc:sqlite:yader.db", None
     )
 
     def datetimeType: String = "DATETIME"

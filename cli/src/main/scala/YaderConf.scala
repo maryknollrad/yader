@@ -9,7 +9,7 @@ import org.dcm4che3.io.DicomInputStream
 import net.sourceforge.tess4j.*
 import org.apache.commons.text.StringEscapeUtils
 
-object YaderCli extends IOApp:
+object YaderConf extends IOApp:
     private def config(host: String, port: Int, called: String, calling: String, encoding: String, tpath: String, insts: Seq[String]) = 
         s"""host = "$host"
         |port = $port
@@ -18,7 +18,7 @@ object YaderCli extends IOApp:
         |# encoding of PACS system 
         |encoding = "$encoding"
         |
-        |# optional, if not given use SQLite with file name of 'ctdose.db'
+        |# optional, if not given use SQLite with file name of 'yader.db'
         |# postgres-db = ""
         |# postgres-user = ""
         |# postgres-password = ""
@@ -37,21 +37,22 @@ object YaderCli extends IOApp:
         |# process-day-behind = 1
         |
         |# optional, default 0, interval in seconds between each day's job processing
-        |# pause-interval = 10
+        |pause-interval = 10
         |
         |# optional, cron mode - runs in server mode
-        |# calendar-event = "*-*-* 08:30:00"
-        |
+        |calendar-event = "*-*-* 08:30:00"
         |
         |# optional, stores png images of dose report series to (value of store-png-path) / yyyymmdd / accessionNumber.png with extracted dose value
         |# store-png-path = "doseimg"
         |
-        |# web server port number
+        |# web server port number, administrator pemission is needed to use port number less than 1024
         |# web-port-number = 7878
         |
         |# ip filter for editing drl value change
         |# empty list permits editing from any ips
         |# drl-edit-ips = []
+        |
+        |# permits editing from current server
         |drl-edit-ips = ["::1"]
         |
         |# show studies unassigned as 'NONE' in DRL tab

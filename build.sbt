@@ -64,10 +64,10 @@ lazy val yader = crossProject(JSPlatform, JVMPlatform)
         ),
     )
 
-lazy val yaderCli = (project in file("cli"))
+lazy val yaderConf = (project in file("cli"))
     .settings(
         jvmSettings,
-        assembly / mainClass := Some("YaderCli"),
+        assembly / mainClass := Some("YaderConf"),
         libraryDependencies ++= Seq(            
             "org.slf4j" % "slf4j-nop" % "2.0.10",
             "org.apache.commons" % "commons-text" % "1.11.0",

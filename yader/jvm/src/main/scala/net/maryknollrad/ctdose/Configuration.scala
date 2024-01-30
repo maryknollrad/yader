@@ -24,8 +24,8 @@ object Configuration:
             req.remoteAddr.map(ip => drlEditIps.isEmpty || drlEditIps.contains(ip.toString)).getOrElse(false)
 
     def ctInfo() = 
-        val ctConf = Try(ConfigFactory.load("ct-info").getConfig("CTINFO"))
-                        .toEither.left.map(e => List(s"Can't find ct-info.conf file or Config does not have CTINFO ${e.getMessage()}"))
+        val ctConf = Try(ConfigFactory.load().getConfig("CTINFO"))
+                        .toEither.left.map(e => List(s"Can't find configure file or Config does not have CTINFO, check configure file or use -Dconfig.file option"))
         ctConf.flatMap(conf =>
                 val (convergedMap, errs) = conf.entrySet.asScala.foldLeft((Map.empty[(String, String), CTDoseSeriesInfo], List.empty[String]))({ case ((dim, errs), e) =>
                     val ks = e.getKey().split('.').map(_.trim)
@@ -125,8 +125,10 @@ object Configuration:
         val c = Configuration().flatMap(c => ctInfo().map((c, _)))
         for 
             r <- c match
-                    case Left(value) => 
+                    case Left(value: String) => 
                         IO(println(value))
+                    case Left(values: List[String]) =>
+                        IO(println(values.mkString(",")))
                     case Right((cdc, m)) =>
                         Tesseract.setTesseractPath(cdc.tpath)
                         f(cdc, m)
