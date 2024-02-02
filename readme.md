@@ -21,12 +21,12 @@ YADER is distributed as a single fat jar file. And needs Java and [Tesseract](ht
 * Run following commands from terminal.  
   ```
   java --version
-
-  openjdk 21.0.2 2024-01-16
-  OpenJDK Runtime Environment GraalVM CE 21.0.2+13.1 (build 21.0.2+13-jvmci-23.1-b30)
-  OpenJDK 64-Bit Server VM GraalVM CE 21.0.2+13.1 (build 21.0.2+13-jvmci-23.1-b30, mixed mode, sharing)
   ```
-* If java is not found, install java from [jdk.java.net](https://jdk.java.net)
+* If java is not found, install java from [jdk.java.net](https://jdk.java.net)  
+    * Oracle JRE requires login and license agreement.  
+    * Recommends LTS version (currently 21).  
+    * Download file for your operating system, extract to a folder and set PATH, JAVA_HOME environment variables.  
+      further information : (Baeldung's site)[https://www.baeldung.com/java-home-vs-path-env-var]
 
 ### Install Tesseract 
 * Tesseract for Windows users  
@@ -45,11 +45,12 @@ YADER is distributed as a single fat jar file. And needs Java and [Tesseract](ht
   ```
   java -jar yaderConf-(version).jar
   ```
-* it will save yader.conf file in current directory
+* if it works to the end, yader will run without problems.
+* yaderConf will save yader.conf file in current directory
 
 ## Run YADER
 * download yader from [github release page](https://github.com/maryknollrad/yader/releases)
-* run 
+* run and let's hope everything works well.
   ```
   java -jar yader-(version).jar
   ```
