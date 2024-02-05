@@ -38,14 +38,15 @@ YADER is distributed as a single fat jar file. And needs Java and [Tesseract](ht
   ```
 
 ## Run YADER Conf
-* yaderConf is a configuration utility for testing DICOM connection and regular expression
+* yaderConf is a configuration utility for testing DICOM connection, OCR and regular expression
+
 * before running find out your PACS server's connection information, including IP address, port, application entity (AE) title
 * download yaderConf from [github release page](https://github.com/maryknollrad/yader/releases)
 * run and answer program's questions
   ```
   java -jar yaderConf-(version).jar
   ```
-* if it works to the end, yader will run without problems.
+* if it works to the end, yader will run without problem.
 * yaderConf will save yader.conf file in current directory
 
 ## Run YADER
