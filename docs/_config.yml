@@ -1,5 +1,6 @@
 title: YADER
 description: Yet Another Dose Extractor and Reporter
-show_downloads: true
+show_downloads: false
 google_analytics:
 theme: jekyll-theme-dinky
+yader_version: 0.9.2
