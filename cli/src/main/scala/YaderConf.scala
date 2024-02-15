@@ -40,7 +40,8 @@ object YaderConf extends IOApp:
         |# optional, default 0, interval in seconds between each day's job processing
         |pause-interval = 10
         |
-        |# optional, cron mode - runs in server mode
+        |# optional, sever mode - updates in every 8:30 AM
+        |# see https://github.com/eikek/calev for CalEv format
         |calendar-event = "*-*-* 08:30:00"
         |
         |# optional, stores png images of dose report series to (value of store-png-path) / yyyymmdd / accessionNumber.png with extracted dose value
